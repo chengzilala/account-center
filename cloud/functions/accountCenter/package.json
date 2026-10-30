@@ -1,0 +1,16 @@
+{
+  "name": "account-center-server",
+  "version": "0.1.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node dev-server.js"
+  },
+  "dependencies": {
+    "@alicloud/dypnsapi20170525": "^2.0.0",
+    "@alicloud/openapi-client": "^0.4.15",
+    "@alicloud/tea-util": "^1.4.11",
+    "nodemailer": "^10.1.7"
+  }
+}

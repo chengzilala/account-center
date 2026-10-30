@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 · 账户中心</title>
+  <link rel="stylesheet" href="assets/ac.css?v=20261030b">
+  <script src="assets/theme.js"></script>
+</head>
+<body class="ac-page">
+  <div class="ac-shell">
+    <nav class="ac-top">
+      <span>账户中心</span>
+      <div class="ac-top-nav">
+        <a href="terms.html">用户协议</a>
+        <a href="privacy.html">隐私政策</a>
+      </div>
+    </nav>
+    <hr class="ac-hairline">
+
+    <main class="ac-login">
+      <section class="ac-hero">
+        <p class="ac-eyebrow">Account · 登录</p>
+        <h1 class="ac-display">登录你的账户</h1>
+        <p class="ac-lead">
+          一个账户，进入所有装置。身份跟着你走——换设备、换登录方式都不受影响。
+          各作品的跑步、阅读等数据仍留在各自的作品里，这里只负责确认「你是谁」。
+        </p>
+      </section>
+
+      <section class="ac-authcard" aria-label="登录方式">
+        <!-- 选择登录方式 -->
+        <div class="ac-panel" id="panel-choose" data-panel="choose">
+          <h2>选择登录方式</h2>
+          <p class="ac-authsub">首次登录会自动创建账户，无需设置密码。</p>
+
+          <button type="button" class="ac-oauth is-hidden" id="open-phone" data-open="phone">
+            <svg class="ac-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="6.5" y="2.5" width="11" height="19" rx="2"></rect>
+              <path d="M10.5 18.5h3"></path>
+            </svg>
+            手机号验证码登录
+          </button>
+
+          <button type="button" class="ac-oauth ac-qr-entry" data-open="qr">
+            <svg class="ac-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="2.8" y="2.8" width="7" height="7"></rect>
+              <rect x="14.2" y="2.8" width="7" height="7"></rect>
+              <rect x="2.8" y="14.2" width="7" height="7"></rect>
+              <path d="M14.2 14.2h3.2v3.2h-3.2z"></path>
+              <path d="M21.2 14.2v3.2h-2.6"></path>
+              <path d="M14.2 21.2h3.2"></path>
+            </svg>
+            手机扫码登录
+          </button>
+
+          <button type="button" class="ac-oauth" data-open="email">
+            <svg class="ac-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="2.5" y="5" width="19" height="14" rx="1.5"></rect>
+              <path d="M3.4 6.4 12 13l8.6-6.6"></path>
+            </svg>
+            邮箱验证码登录
+          </button>
+
+          <div class="ac-oauth-list" id="oauth-list"></div>
+
+          <p class="ac-or"><span>其他登录方式</span></p>
+
+          <div class="ac-methods">
+            <button type="button" class="ac-method" data-open="account">
+              <svg class="ac-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="7.5" cy="12" r="4.2"></circle>
+                <path d="M11.7 12H21"></path>
+                <path d="M17.6 12v3.6"></path>
+                <path d="M20.5 12v2.8"></path>
+              </svg>
+              <span>账户码</span>
+            </button>
+            <button type="button" class="ac-method" data-open="code">
+              <svg class="ac-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 4 8.5 20"></path>
+                <path d="M15.5 4 14 20"></path>
+                <path d="M4 9.5h16"></path>
+                <path d="M3 15h16"></path>
+              </svg>
+              <span>6 位码</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 扫码登录（用已登录的手机确认） -->
+        <div class="ac-panel is-hidden" id="panel-qr" data-panel="qr">
+          <button type="button" class="ac-back" data-back>← 返回</button>
+          <h2>手机扫码登录</h2>
+          <p class="ac-authsub">用已经登录的手机扫一下二维码，点「确认」这台设备就登录了，不用收验证码。</p>
+
+          <div class="ac-qr-box">
+            <canvas id="qr-canvas" width="200" height="200" aria-label="登录二维码"></canvas>
+          </div>
+          <p class="ac-qr-state" id="qr-state">正在生成二维码…</p>
+          <button type="button" class="ac-btn ac-btn-secondary ac-btn-block" id="qr-refresh">刷新二维码</button>
+        </div>
+
+        <!-- 手机号验证码 -->
+        <div class="ac-panel is-hidden" id="panel-phone" data-panel="phone">
+          <button type="button" class="ac-back" data-back>← 返回</button>
+          <h2>手机号验证码登录</h2>
+          <p class="ac-authsub">没注册过的手机号会自动创建账户。已有账户请先用原方式登录，再到「登录方式」里绑定。</p>
+
+          <form id="form-phone" novalidate>
+            <label class="ac-field">
+              <span class="ac-label">手机号</span>
+              <input class="ac-input" id="phone" type="tel" inputmode="numeric" maxlength="11"
+                     autocomplete="tel" placeholder="中国大陆 11 位手机号">
+            </label>
+            <div class="ac-captcha-row">
+              <input class="ac-input" id="phone-captcha" type="text" inputmode="numeric" maxlength="4"
+                     autocomplete="off" placeholder="图形验证码">
+              <button type="button" class="ac-captcha-img" id="phone-captcha-img"
+                      title="看不清？换一张" aria-label="换一张图形验证码"></button>
+            </div>
+            <div class="ac-inline">
+              <input class="ac-input" id="phone-code" type="text" inputmode="numeric" maxlength="6"
+                     autocomplete="one-time-code" placeholder="6 位验证码">
+              <button type="button" class="ac-btn ac-btn-secondary" id="send-phone">发送验证码</button>
+            </div>
+            <p class="ac-hint">验证码 10 分钟内有效；同一号码每天最多获取 10 次。</p>
+            <button type="submit" class="ac-btn ac-btn-block" id="submit-phone">登录</button>
+          </form>
+        </div>
+
+        <!-- 邮箱验证码 -->
+        <div class="ac-panel is-hidden" id="panel-email" data-panel="email">
+          <button type="button" class="ac-back" data-back>← 返回</button>
+          <h2>邮箱验证码登录</h2>
+          <p class="ac-authsub">没注册过的邮箱会自动创建账户。</p>
+
+          <form id="form-email" novalidate>
+            <label class="ac-field">
+              <span class="ac-label">邮箱</span>
+              <div class="ac-suggest-wrap">
+                <input class="ac-input" id="email" type="email" inputmode="email" autocomplete="email"
+                       placeholder="you@example.com" role="combobox" aria-autocomplete="list"
+                       aria-expanded="false" aria-controls="email-suggest">
+                <div class="ac-suggest is-hidden" id="email-suggest" role="listbox" aria-label="常用邮箱后缀"></div>
+              </div>
+            </label>
+            <div class="ac-inline">
+              <input class="ac-input" id="email-code" type="text" inputmode="numeric" maxlength="6"
+                     autocomplete="one-time-code" placeholder="6 位验证码">
+              <button type="button" class="ac-btn ac-btn-secondary" id="send-email">发送验证码</button>
+            </div>
+            <p class="ac-hint">验证码 10 分钟内有效，收不到请看看垃圾箱。</p>
+            <button type="submit" class="ac-btn ac-btn-block" id="submit-email">登录</button>
+          </form>
+        </div>
+
+        <!-- 账户码 -->
+        <div class="ac-panel is-hidden" id="panel-account" data-panel="account">
+          <button type="button" class="ac-back" data-back>← 返回</button>
+          <h2>账户码登录</h2>
+          <p class="ac-authsub">适合从旧设备迁移过来的账户。账户码等同密码，不要发给别人。</p>
+
+          <form id="form-account" novalidate>
+            <label class="ac-field">
+              <span class="ac-label">账户码（32 位十六进制）</span>
+              <input class="ac-input" id="account-code" type="text" maxlength="32" spellcheck="false"
+                     autocomplete="off" placeholder="例如 9f3c…8046">
+            </label>
+            <p class="ac-hint">在已登录设备的「我的账户 → 账户凭证」里可以看到；没有账户码就先改用邮箱登录。</p>
+            <button type="submit" class="ac-btn ac-btn-block" id="submit-account">登录</button>
+          </form>
+        </div>
+
+        <!-- 6 位码 -->
+        <div class="ac-panel is-hidden" id="panel-code" data-panel="code">
+          <button type="button" class="ac-back" data-back>← 返回</button>
+          <h2>6 位码登录</h2>
+          <p class="ac-authsub">在已登录的设备上点「生成 6 位码」，10 分钟内有效，且只能用一次。</p>
+
+          <form id="form-code" novalidate>
+            <label class="ac-field">
+              <span class="ac-label">6 位登录码</span>
+              <input class="ac-input" id="transfer-code" type="text" inputmode="numeric" maxlength="6"
+                     autocomplete="one-time-code" placeholder="6 位数字">
+            </label>
+            <button type="submit" class="ac-btn ac-btn-block" id="submit-code">登录</button>
+          </form>
+        </div>
+
+        <p class="ac-msg" id="msg" role="status"></p>
+        <p class="ac-agree">
+          登录即表示你同意
+          <a href="terms.html">用户协议</a>
+          与
+          <a href="privacy.html">隐私政策</a>。
+        </p>
+      </section>
+    </main>
+
+    <footer class="ac-foot">
+      <span>账户中心 · 只解决「你是谁」，不保存作品数据。</span>
+      <span><a href="terms.html">用户协议</a> · <a href="privacy.html">隐私政策</a> · © 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a></span>
+    </footer>
+  </div>
+
+  <script src="assets/ac.js"></script>
+  <script src="assets/qrcode.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var AC = window.AC;
+      var msg = document.getElementById('msg');
+      var sendBtn = document.getElementById('send-email');
+      var sendPhoneBtn = document.getElementById('send-phone');
+      var cooldownTimer = null;
+      var phoneCooldownTimer = null;
+
+      // 跨域作品登录：作品页带 productId + returnUrl 过来，登录后签一次性票据再跳回
+      var params = new URLSearchParams(location.search);
+      var productId = (params.get('productId') || '').trim();
+      var returnUrl = params.get('returnUrl') || '';
+      var crossDomain = Boolean(productId && isHttpUrl(returnUrl));
+
+      // 第三方登录回跳：成功带 oauth_code，失败带 oauth_error
+      var oauthCode = (params.get('oauth_code') || '').trim();
+      var oauthError = (params.get('oauth_error') || '').trim();
+      var OAUTH_META = {
+        github: { name: 'GitHub', chip: 'GH' },
+        gitee: { name: 'Gitee', chip: 'GE' },
+        microsoft: { name: 'Microsoft', chip: 'MS' }
+      };
+      var OAUTH_ERRORS = {
+        denied: '你取消了第三方授权，可以换个方式登录',
+        state: '授权已过期，请重新点一次登录',
+        provider: '第三方平台返回异常，请稍后重试',
+        email_exists: '这个第三方账号的邮箱已在本站注册。请先用邮箱登录，再到「登录方式」里绑定；绑定后就能用它快捷登录',
+        key_taken: '这个第三方账号已绑定到另一个账户，无法重复绑定',
+        not_configured: '该登录方式暂未开放',
+        internal: '第三方登录失败，请稍后重试'
+      };
+
+      function isHttpUrl(value) {
+        try {
+          var url = new URL(value);
+          return url.protocol === 'https:' || url.protocol === 'http:';
+        } catch (err) {
+          return false;
+        }
+      }
+
+      function showMsg(text, type) {
+        msg.textContent = text || '';
+        msg.className = 'ac-msg' + (type ? ' is-' + type : '');
+      }
+
+      /** 从地址栏抹掉一次性参数，避免刷新时重复使用 */
+      function dropParam(name) {
+        var url = new URL(location.href);
+        if (!url.searchParams.has(name)) return;
+        url.searchParams.delete(name);
+        history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash);
+      }
+
+      function nextPath() {
+        var raw = new URLSearchParams(location.search).get('next') || '';
+        return raw.charAt(0) === '/' && raw.charAt(1) !== '/' ? raw : 'account.html';
+      }
+
+      async function done(data) {
+        AC.setToken(data.token);
+
+        if (!crossDomain) {
+          location.replace(nextPath());
+          return;
+        }
+
+        try {
+          var issued = await AC.call('auth.ticket.issue', {
+            productId: productId,
+            returnUrl: returnUrl
+          });
+          location.replace(issued.redirectUrl);
+        } catch (err) {
+          showMsg((err.message || '跨域登录失败') + '，可先在账户页继续操作', 'error');
+          setTimeout(function () {
+            location.replace(nextPath());
+          }, 1500);
+        }
+      }
+
+      function handleError(err, fallbackBtn) {
+        if (fallbackBtn) fallbackBtn.disabled = false;
+        if (err.code === 'RATE_LIMITED' && err.retryAfter) {
+          showMsg(err.message + '（' + err.retryAfter + ' 秒后重试）', 'error');
+          return;
+        }
+        showMsg(err.message, 'error');
+      }
+
+      /* 第三方登录：只有后端配好 Client ID/Secret 的方式才会出现 */
+      function renderOAuth(providers) {
+        var box = document.getElementById('oauth-list');
+        box.textContent = '';
+
+        (providers || []).forEach(function (item) {
+          var meta = OAUTH_META[item.id] || {
+            name: item.name || item.id,
+            chip: String(item.id || '?').slice(0, 2).toUpperCase()
+          };
+
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ac-oauth is-ghost';
+
+          var chip = document.createElement('span');
+          chip.className = 'ac-chip ac-chip--oauth';
+          chip.setAttribute('aria-hidden', 'true');
+          chip.textContent = meta.chip;
+
+          btn.appendChild(chip);
+          btn.appendChild(document.createTextNode('用 ' + meta.name + ' 登录'));
+
+          btn.addEventListener('click', async function () {
+            btn.disabled = true;
+            showMsg('正在跳转到 ' + meta.name + '…');
+            try {
+              var started = await AC.call('auth.oauth.start', {
+                provider: item.id,
+                mode: 'login',
+                returnUrl: location.href
+              });
+              location.href = started.url;
+            } catch (err) {
+              handleError(err, btn);
+            }
+          });
+
+          box.appendChild(btn);
+        });
+      }
+
+      AC.call('auth.oauth.providers').then(function (data) {
+        renderOAuth(data.providers);
+      }).catch(function () {
+        // 没配置或接口异常：不显示第三方入口，邮箱登录照常可用
+      });
+
+      /* 手机号登录：后端配好短信通道才显示入口 */
+      AC.call('auth.methods').then(function (data) {
+        if (data && data.sms) document.getElementById('open-phone').classList.remove('is-hidden');
+      }).catch(function () {});
+
+      /* 图形验证码：点图片换一张；发送成功 / 校验失败后自动换 */
+      var captchaLoading = false;
+
+      async function refreshCaptcha() {
+        if (captchaLoading) return;
+        captchaLoading = true;
+        var box = document.getElementById('phone-captcha-img');
+        box.disabled = true;
+        try {
+          var data = await AC.call('auth.captcha');
+          box.innerHTML = data.svg;
+          box.dataset.captchaId = data.id;
+          document.getElementById('phone-captcha').value = '';
+        } catch (err) {
+          box.textContent = '点此重试';
+        } finally {
+          box.disabled = false;
+          captchaLoading = false;
+        }
+      }
+
+      document.getElementById('phone-captcha-img').addEventListener('click', refreshCaptcha);
+
+      document.getElementById('phone').addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 11);
+      });
+
+      function startPhoneCooldown(seconds) {
+        var left = Number(seconds) || 60;
+        if (phoneCooldownTimer) clearInterval(phoneCooldownTimer);
+        sendPhoneBtn.disabled = true;
+        sendPhoneBtn.textContent = left + ' 秒后重发';
+        phoneCooldownTimer = setInterval(function () {
+          left -= 1;
+          if (left <= 0) {
+            clearInterval(phoneCooldownTimer);
+            phoneCooldownTimer = null;
+            sendPhoneBtn.disabled = false;
+            sendPhoneBtn.textContent = '发送验证码';
+            return;
+          }
+          sendPhoneBtn.textContent = left + ' 秒后重发';
+        }, 1000);
+      }
+
+      sendPhoneBtn.addEventListener('click', async function () {
+        var phone = document.getElementById('phone').value.trim();
+        var captchaCode = document.getElementById('phone-captcha').value.trim();
+        var captchaId = document.getElementById('phone-captcha-img').dataset.captchaId || '';
+
+        if (!/^1[3-9]\d{9}$/.test(phone)) return showMsg('请输入正确的中国大陆手机号', 'error');
+        if (!/^\d{4}$/.test(captchaCode)) return showMsg('请先填写图形验证码', 'error');
+        if (!captchaId) return showMsg('图形验证码没加载出来，点一下图换一张', 'error');
+
+        sendPhoneBtn.disabled = true;
+        showMsg('正在发送…');
+        try {
+          var data = await AC.call('auth.sms.send', {
+            phone: phone,
+            captchaId: captchaId,
+            captchaCode: captchaCode
+          });
+          showMsg('验证码已发到 ' + (data.masked || phone) + '，10 分钟内有效', 'ok');
+          startPhoneCooldown(data.cooldown || 60);
+          refreshCaptcha();
+        } catch (err) {
+          sendPhoneBtn.disabled = false;
+          if (err.code === 'CAPTCHA_INVALID') refreshCaptcha();
+          if (err.code === 'RATE_LIMITED' && err.retryAfter) startPhoneCooldown(err.retryAfter);
+          showMsg(err.message, 'error');
+        }
+      });
+
+      document.getElementById('form-phone').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var btn = document.getElementById('submit-phone');
+        var phone = document.getElementById('phone').value.trim();
+        var code = document.getElementById('phone-code').value.trim();
+
+        if (!/^1[3-9]\d{9}$/.test(phone)) return showMsg('请输入正确的中国大陆手机号', 'error');
+        if (!/^\d{6}$/.test(code)) return showMsg('请填写 6 位验证码', 'error');
+
+        btn.disabled = true;
+        showMsg('正在登录…');
+        try {
+          done(await AC.call('auth.sms.verify', { phone: phone, code: code }));
+        } catch (err) {
+          handleError(err, btn);
+        }
+      });
+
+      /* 扫码登录：电脑出示二维码，已登录的手机确认后换到 Token */
+      var qrCanvas = document.getElementById('qr-canvas');
+      var qrStateEl = document.getElementById('qr-state');
+      var qrTimer = null;
+      var qrId = '';
+
+      function qrSay(text, isError) {
+        qrStateEl.textContent = text;
+        qrStateEl.className = 'ac-qr-state' + (isError ? ' is-error' : '');
+      }
+
+      function stopQrPolling() {
+        if (qrTimer) {
+          clearInterval(qrTimer);
+          qrTimer = null;
+        }
+      }
+
+      function drawQr(text) {
+        var qr = window.ACQR.matrix(text);
+        var ctx = qrCanvas.getContext('2d');
+        var quiet = 3;
+        var cell = Math.max(1, Math.floor(qrCanvas.width / (qr.size + quiet * 2)));
+        var offset = Math.floor((qrCanvas.width - cell * (qr.size + quiet * 2)) / 2);
+
+        ctx.fillStyle = '#fffdf8';
+        ctx.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
+        ctx.fillStyle = '#14120d';
+        for (var row = 0; row < qr.size; row += 1) {
+          for (var col = 0; col < qr.size; col += 1) {
+            if (qr.matrix[row][col]) {
+              ctx.fillRect(
+                offset + (col + quiet) * cell,
+                offset + (row + quiet) * cell,
+                cell + 0.4,
+                cell + 0.4
+              );
+            }
+          }
+        }
+      }
+
+      async function pollQr() {
+        if (!qrId) return;
+        var res;
+        try {
+          res = await AC.call('auth.qr.poll', { qrId: qrId });
+        } catch (err) {
+          return; // 网络抖动，下一轮再试
+        }
+        if (res.status === 'approved') {
+          stopQrPolling();
+          qrSay('已确认，正在进入…');
+          done(res);
+          return;
+        }
+        if (res.status === 'expired') {
+          stopQrPolling();
+          qrSay('二维码已过期，点下面「刷新二维码」', true);
+          return;
+        }
+        if (res.status === 'denied' || res.status === 'used') {
+          stopQrPolling();
+          qrSay('这次没有确认成功，请刷新二维码重试', true);
+        }
+      }
+
+      async function startQr() {
+        stopQrPolling();
+        qrId = '';
+        qrSay('正在生成二维码…');
+        qrCanvas.getContext('2d').clearRect(0, 0, qrCanvas.width, qrCanvas.height);
+        try {
+          var data = await AC.call('auth.qr.start');
+          qrId = data.qrId;
+          drawQr(location.origin + '/qr.html?c=' + qrId);
+          qrSay('用手机相机或微信扫一扫，然后在手机上点「确认」');
+          qrTimer = setInterval(pollQr, 2000);
+        } catch (err) {
+          qrSay(err.message, true);
+        }
+      }
+
+      document.getElementById('qr-refresh').addEventListener('click', startQr);
+
+      /* 邮箱输入：补全常用邮箱后缀，少打字 */
+      var EMAIL_DOMAINS = ['qq.com', '163.com', '126.com', 'gmail.com', 'outlook.com',
+        'foxmail.com', 'icloud.com', 'hotmail.com', 'sina.com', 'yahoo.com'];
+      var emailInput = document.getElementById('email');
+      var emailSuggest = document.getElementById('email-suggest');
+      var emailOptions = [];
+      var emailActive = -1;
+
+      function hideEmailSuggest() {
+        emailOptions = [];
+        emailActive = -1;
+        emailSuggest.innerHTML = '';
+        emailSuggest.classList.add('is-hidden');
+        emailInput.setAttribute('aria-expanded', 'false');
+        emailInput.removeAttribute('aria-activedescendant');
+      }
+
+      function buildEmailOptions(value) {
+        if (!value) return [];
+        var at = value.indexOf('@');
+        var local = at === -1 ? value : value.slice(0, at);
+        var frag = at === -1 ? '' : value.slice(at + 1).toLowerCase();
+        if (!local) return [];
+        var list = [];
+        for (var i = 0; i < EMAIL_DOMAINS.length; i += 1) {
+          var domain = EMAIL_DOMAINS[i];
+          if (frag && domain.indexOf(frag) !== 0) continue;
+          if (frag === domain) continue;
+          list.push(local + '@' + domain);
+        }
+        return list;
+      }
+
+      function setEmailActive(index) {
+        var items = emailSuggest.children;
+        for (var i = 0; i < items.length; i += 1) {
+          items[i].classList.toggle('is-active', i === index);
+        }
+        emailActive = index;
+        if (index >= 0 && items[index]) {
+          items[index].scrollIntoView({ block: 'nearest' });
+          emailInput.setAttribute('aria-activedescendant', items[index].id);
+        } else {
+          emailInput.removeAttribute('aria-activedescendant');
+        }
+      }
+
+      function fillEmail(full) {
+        emailInput.value = full;
+        hideEmailSuggest();
+        emailInput.focus();
+      }
+
+      function renderEmailSuggest(value) {
+        var list = buildEmailOptions(value);
+        if (!list.length) {
+          hideEmailSuggest();
+          return;
+        }
+        emailOptions = list;
+        emailSuggest.innerHTML = '';
+        for (var i = 0; i < list.length; i += 1) {
+          (function (full, index) {
+            var at = full.lastIndexOf('@');
+            var item = document.createElement('div');
+            item.className = 'ac-suggest-item';
+            item.id = 'email-suggest-' + index;
+            item.setAttribute('role', 'option');
+            var name = document.createElement('span');
+            name.textContent = full.slice(0, at + 1);
+            var domain = document.createElement('em');
+            domain.textContent = full.slice(at + 1);
+            item.appendChild(name);
+            item.appendChild(domain);
+            /* mousedown 抢在输入框失焦前填入，避免点不到 */
+            item.addEventListener('mousedown', function (event) {
+              event.preventDefault();
+              fillEmail(full);
+            });
+            emailSuggest.appendChild(item);
+          }(list[i], i));
+        }
+        setEmailActive(-1);
+        emailSuggest.classList.remove('is-hidden');
+        emailInput.setAttribute('aria-expanded', 'true');
+      }
+
+      emailInput.addEventListener('input', function () {
+        renderEmailSuggest(this.value.trim());
+      });
+
+      emailInput.addEventListener('keydown', function (event) {
+        if (emailSuggest.classList.contains('is-hidden')) {
+          if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && this.value.trim()) {
+            event.preventDefault();
+            renderEmailSuggest(this.value.trim());
+          }
+          return;
+        }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          var step = event.key === 'ArrowDown' ? 1 : -1;
+          var next = emailActive + step;
+          if (next < 0) next = emailOptions.length - 1;
+          if (next >= emailOptions.length) next = 0;
+          setEmailActive(next);
+          return;
+        }
+        if (event.key === 'Enter') {
+          if (emailActive >= 0 && emailOptions[emailActive]) {
+            event.preventDefault();
+            fillEmail(emailOptions[emailActive]);
+          } else {
+            hideEmailSuggest();
+          }
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          hideEmailSuggest();
+        }
+      });
+
+      emailInput.addEventListener('blur', hideEmailSuggest);
+
+      /* 登录方式切换 */
+      var panels = document.querySelectorAll('.ac-panel');
+
+      function showPanel(name) {
+        Array.prototype.forEach.call(panels, function (panel) {
+          panel.classList.toggle('is-hidden', panel.dataset.panel !== name);
+        });
+        showMsg('');
+        if (name !== 'email') hideEmailSuggest();
+        if (name === 'email') {
+          document.getElementById('email').focus();
+        }
+        if (name === 'phone') {
+          document.getElementById('phone').focus();
+          refreshCaptcha();
+        }
+        if (name === 'qr') {
+          startQr();
+        } else {
+          stopQrPolling();
+        }
+      }
+
+      Array.prototype.forEach.call(document.querySelectorAll('[data-open]'), function (el) {
+        el.addEventListener('click', function (event) {
+          event.preventDefault();
+          showPanel(el.dataset.open);
+        });
+      });
+
+      Array.prototype.forEach.call(document.querySelectorAll('[data-back]'), function (el) {
+        el.addEventListener('click', function () {
+          showPanel('choose');
+        });
+      });
+
+      /* 扫凭证二维码进来：自动切到邮箱面板并填好邮箱 */
+      var scannedEmail = (params.get('e') || '').trim();
+      if (scannedEmail) {
+        document.getElementById('email').value = scannedEmail;
+        showPanel('email');
+        showMsg('已从二维码填入邮箱，点「发送验证码」即可', 'ok');
+      }
+
+      /* 发邮箱验证码 + 60 秒冷却 */
+      function startCooldown(seconds) {
+        var left = Number(seconds) || 60;
+        if (cooldownTimer) clearInterval(cooldownTimer);
+        sendBtn.disabled = true;
+        sendBtn.textContent = left + ' 秒后重发';
+        cooldownTimer = setInterval(function () {
+          left -= 1;
+          if (left <= 0) {
+            clearInterval(cooldownTimer);
+            cooldownTimer = null;
+            sendBtn.disabled = false;
+            sendBtn.textContent = '发送验证码';
+            return;
+          }
+          sendBtn.textContent = left + ' 秒后重发';
+        }, 1000);
+      }
+
+      sendBtn.addEventListener('click', async function () {
+        var email = document.getElementById('email').value.trim();
+        if (!email) {
+          showMsg('请先填写邮箱', 'error');
+          return;
+        }
+        sendBtn.disabled = true;
+        showMsg('正在发送…');
+        try {
+          var data = await AC.call('auth.email.send', { email: email });
+          showMsg('验证码已发到 ' + (data.masked || email) + '，10 分钟内有效', 'ok');
+          startCooldown(data.cooldown || 60);
+        } catch (err) {
+          sendBtn.disabled = false;
+          if (err.code === 'RATE_LIMITED' && err.retryAfter) {
+            showMsg(err.message + '（' + err.retryAfter + ' 秒后重试）', 'error');
+            startCooldown(err.retryAfter);
+            return;
+          }
+          showMsg(err.message, 'error');
+        }
+      });
+
+      /* 邮箱验证码登录 */
+      document.getElementById('form-email').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var btn = document.getElementById('submit-email');
+        var email = document.getElementById('email').value.trim();
+        var code = document.getElementById('email-code').value.trim();
+        if (!email) return showMsg('请填写邮箱', 'error');
+        if (!/^\d{6}$/.test(code)) return showMsg('请填写 6 位验证码', 'error');
+
+        btn.disabled = true;
+        showMsg('正在登录…');
+        try {
+          done(await AC.call('auth.email.verify', { email: email, code: code }));
+        } catch (err) {
+          handleError(err, btn);
+        }
+      });
+
+      /* 账户码登录：只保留十六进制字符并转小写 */
+      var accountInput = document.getElementById('account-code');
+      accountInput.addEventListener('input', function () {
+        this.value = this.value.toLowerCase().replace(/[^0-9a-f]/g, '').slice(0, 32);
+      });
+
+      document.getElementById('form-account').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var btn = document.getElementById('submit-account');
+        var accountCode = accountInput.value.trim();
+        if (accountCode.length !== 32) return showMsg('账户码应为 32 位十六进制字符', 'error');
+
+        btn.disabled = true;
+        showMsg('正在登录…');
+        try {
+          done(await AC.call('auth.accountCode.login', { accountCode: accountCode }));
+        } catch (err) {
+          handleError(err, btn);
+        }
+      });
+
+      /* 6 位码登录 */
+      document.getElementById('form-code').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var btn = document.getElementById('submit-code');
+        var code = document.getElementById('transfer-code').value.trim();
+        if (!/^\d{6}$/.test(code)) return showMsg('请填写 6 位数字', 'error');
+
+        btn.disabled = true;
+        showMsg('正在登录…');
+        try {
+          done(await AC.call('auth.code.redeem', { code: code }));
+        } catch (err) {
+          handleError(err, btn);
+        }
+      });
+
+      /* 第三方回跳：先换 Token，再按普通登录流程去向 */
+      if (oauthCode) {
+        dropParam('oauth_code');
+        showMsg('正在完成第三方登录…');
+        AC.call('auth.oauth.exchange', { code: oauthCode }).then(function (data) {
+          done(data);
+        }).catch(function (err) {
+          handleError(err, null);
+        });
+      } else if (oauthError) {
+        dropParam('oauth_error');
+        showMsg(OAUTH_ERRORS[oauthError] || OAUTH_ERRORS.internal, 'error');
+      } else if (AC.getToken()) {
+        /* 已登录就直接进我的账户（跨域来源则直接签票跳回） */
+        AC.call('me').then(function () {
+          done({ token: AC.getToken() });
+        }).catch(function (err) {
+          if (AC.isLoggedOut(err)) AC.clearToken();
+        });
+      }
+
+      if (new URLSearchParams(location.search).get('deleted') === '1') {
+        showMsg('账号已注销，钥匙已解除绑定', 'ok');
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>正在同步登录…</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #f2eee2;
+    color: #14120d;
+    font: 16px/1.7 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  }
+  p { margin: 0; color: #857d71; }
+</style>
+</head>
+<body>
+<p>正在同步登录…</p>
+<script>
+/* 静默跨域登录中转页：
+   作品侧发现本域没有 Token 时，跳到这里；这里用账户中心的 Token 签一张一次性票据，
+   再跳回作品页换 Token——用户不用点任何东西。
+   失败一律回跳回 returnUrl 并带 ps_sso=none，作品侧据此不再重试。 */
+(function () {
+  var TOKEN_KEY = 'ps_token';
+  var q = new URLSearchParams(location.search);
+  var productId = String(q.get('productId') || '').trim();
+  var back = String(q.get('returnUrl') || '');
+
+  function safeUrl(value) {
+    try {
+      var url = new URL(value);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+      var host = url.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') return url;
+      if (!/(^|\.)chesterlee\.cn$/i.test(host)) return null;
+      return url;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  var target = safeUrl(back);
+  if (!target || !productId) {
+    location.replace('/account.html');
+    return;
+  }
+
+  function bounce() {
+    var url = new URL(target.toString());
+    url.searchParams.set('ps_sso', 'none');
+    location.replace(url.toString());
+  }
+
+  var token = '';
+  try {
+    token = localStorage.getItem(TOKEN_KEY) || '';
+  } catch (err) {
+    token = '';
+  }
+  if (!token) {
+    bounce();
+    return;
+  }
+
+  fetch('/accountCenter', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action: 'auth.ticket.issue', productId: productId, returnUrl: target.toString() })
+  }).then(function (res) {
+    return res.json().catch(function () { return null; });
+  }).then(function (body) {
+    if (body && body.ok === true && body.data && body.data.redirectUrl) {
+      location.replace(body.data.redirectUrl);
+      return;
+    }
+    if (body && (body.code === 'UNAUTHORIZED' || body.code === 'ACCOUNT_DELETED')) {
+      try { localStorage.removeItem(TOKEN_KEY); } catch (err) {}
+    }
+    bounce();
+  }).catch(bounce);
+})();
+</script>
+</body>
+</html>

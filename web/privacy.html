@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>隐私政策 · 账户中心</title>
+  <link rel="stylesheet" href="assets/ac.css?v=20261030b">
+  <script src="assets/theme.js"></script>
+</head>
+<body class="ac-page">
+  <div class="ac-shell">
+    <nav class="ac-top">
+      <span>账户中心</span>
+      <div class="ac-top-nav">
+        <a href="login.html">登录</a>
+        <a href="terms.html">用户协议</a>
+      </div>
+    </nav>
+    <hr class="ac-hairline">
+
+    <main class="ac-doc">
+      <p class="ac-eyebrow">Privacy · 隐私政策</p>
+      <h1 class="ac-doc-title">隐私政策</h1>
+      <p class="ac-doc-lead">
+        本站只收集登录和账户识别所必需的信息，不收集你在各作品里的阅读、跑步等内容。
+        这份说明讲清楚：收什么、为什么收、存多久、你能怎么处理。
+      </p>
+      <p class="ac-doc-meta">生效日期：2026-10-29 ｜ 适用范围：账户中心页面与账户接口</p>
+
+      <section>
+        <h2>一、我们可能收集的信息</h2>
+        <ul>
+          <li><strong>账户标识：</strong>邮箱地址、手机号；如果你使用旧设备账户码，则是那串 32 位账户码（服务端只保存哈希，页面上只显示掩码）；如果你使用第三方登录，则是该平台的用户 ID 与账号名。</li>
+          <li><strong>登录方式：</strong>本次使用邮箱、手机号、账户码、6 位码还是第三方平台登录，以及绑定关系与最近使用时间。</li>
+          <li><strong>账户状态：</strong>创建时间、是否注销、会话数量与撤销记录。</li>
+          <li><strong>安全记录：</strong>登录成功 / 失败、退出、生成 6 位码、生成凭证、注销等动作与时间；IP 只保存加盐哈希，不保存明文；浏览器信息只归并为「手机 / 桌面」。</li>
+          <li><strong>页面状态：</strong>登录态保存在你本机的浏览器存储中，用于判断是否已登录。</li>
+        </ul>
+        <p>
+          我们<strong>不收集</strong>：微信读书 Key、高驰 Token、DeepSeek Key 等第三方凭证；
+          各作品的跑步轨迹、书架、笔记、阅读人格等业务数据；通讯录、相册、定位与广告标识。
+        </p>
+      </section>
+
+      <section>
+        <h2>二、信息用途</h2>
+        <ul>
+          <li>识别你是谁，让你用同一个 uid 进入各装置；</li>
+          <li>维持登录状态，支持退出当前设备与退出全部设备；</li>
+          <li>判断装置的开通状态与访问权限；</li>
+          <li>发送登录验证码，并处理找回、换设备等场景；</li>
+          <li>发现异常登录、限流与锁定，维护账户安全；</li>
+          <li>在你主动操作时生成账户凭证图片。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>三、第三方登录</h2>
+        <p>
+          你可以选择用 GitHub、Gitee 或 Microsoft 账号登录。点击对应按钮后会跳转到该平台的授权页，
+          本站只会接收平台返回的<strong>用户 ID、账号名、昵称、头像</strong>；若你在授权页同意，还会接收
+          <strong>邮箱地址</strong>，用于判断你的邮箱是否已经注册过本站账户。
+        </p>
+        <p>
+          本站<strong>不会获取你在该平台的密码</strong>，也不会读取你的仓库、代码、邮件、文件或其他内容；
+          授权范围以平台授权页展示为准。第三方登录只用于识别「你是谁」，不会把本站数据写回该平台。
+        </p>
+        <p>
+          如果你的第三方账号邮箱已经在本站注册，系统不会自动合并账户，而是提示你先用邮箱登录，
+          再到「我的账户 → 登录方式」里主动绑定。你随时可以换用其他登录方式，无需继续使用第三方登录。
+        </p>
+        <p>
+          邮件验证码通过自建 SMTP 通道发送，发信服务商仅处理收件邮箱与邮件内容，不用于其他用途。
+        </p>
+        <p>
+          手机验证码通过阿里云短信服务发送，我们只把手机号与验证码内容交给该服务商完成下发与核验，
+          不向其提供你的账户资料或其他信息。发送前需要先通过图形验证码，用于防止被批量刷取。
+        </p>
+      </section>
+
+      <section>
+        <h2>四、Cookie 与会话</h2>
+        <p>
+          本站不使用第三方统计或广告 Cookie。登录后，会话令牌保存在你浏览器的
+          <code>localStorage</code>（键名 <code>ps_token</code>），用于向账户接口证明登录状态；
+          退出登录或注销时会清除。服务端只保存令牌的哈希，不保存明文。
+        </p>
+      </section>
+
+      <section>
+        <h2>五、存储与留存</h2>
+        <ul>
+          <li>账户与绑定关系：保存到你主动注销账户为止，注销后删除钥匙并撤销全部会话。</li>
+          <li>邮箱验证码、短信验证码与 6 位码：分别 10 分钟有效，且一次性使用，过期即失效。</li>
+          <li>账户动作与安全记录：按契约保留 90 天，用于安全审计，到期自动清理。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>六、你的权利</h2>
+        <ul>
+          <li><strong>查看：</strong>在「我的账户」查看昵称、邮箱 / 手机号掩码、登录方式与装置开通状态。</li>
+          <li><strong>带走：</strong>生成「账户凭证」图片，保存邮箱与 uid，方便换设备找回。</li>
+          <li><strong>退出：</strong>随时退出当前设备，或一次退出全部设备。</li>
+          <li><strong>注销：</strong>在「我的账户 → 注销账号」永久删除账户与全部钥匙，不可恢复。</li>
+        </ul>
+      </section>
+
+      <section id="security">
+        <h2>七、我们怎么保护账户</h2>
+        <ul>
+          <li>全站强制 HTTPS，登录与接口请求不走的明文通道不启用；</li>
+          <li>会话令牌服务端只存加盐哈希，泄露数据文件也无法直接冒用登录态；</li>
+          <li>邮箱验证码、短信验证码与 6 位码短时有效、一次性使用，生成新码旧码立即作废；</li>
+          <li>账户码按密码对待：严格限流、连续失败锁定、页面只显示掩码；</li>
+          <li>邮箱发送、短信发送、IP、异常访问均有频率限制，防止撞库与刷验证码；</li>
+          <li>发信密钥、令牌盐等只放在服务端环境变量，不写入代码仓库、不写入日志；</li>
+          <li>账户动作与安全事件写入审计记录，便于发现异常并支持「退出全部设备」。</li>
+        </ul>
+        <p>
+          没有任何系统能保证绝对安全。若发现可疑登录，请立即退出全部设备并联系
+          <a href="mailto:chester@chesterlee.cn">chester@chesterlee.cn</a>。
+        </p>
+      </section>
+
+      <section>
+        <h2>八、信息共享</h2>
+        <p>
+          我们不出售你的个人信息，也不会把账户数据用于广告画像。
+          只有在以下情况才会涉及第三方：发送验证码所必需的邮件服务商与短信服务商（阿里云）、
+          你主动选择登录的第三方平台（GitHub / Gitee / Microsoft，仅在你点击授权时）、服务器与网络基础设施，
+          以及法律法规明确要求的情形。
+        </p>
+      </section>
+
+      <section>
+        <h2>九、未成年人</h2>
+        <p>
+          本服务面向一般用户，不专门面向未成年人。若你未满 14 周岁，
+          请在监护人同意与指导下使用，并由监护人协助管理账户。
+        </p>
+      </section>
+
+      <section>
+        <h2>十、政策更新</h2>
+        <p>
+          功能调整可能带来信息处理方式的变化，更新后会在本页标注生效日期。
+          涉及重大变化时，会在登录页或账户页提示。
+        </p>
+      </section>
+
+      <section>
+        <h2>十一、联系</h2>
+        <p>
+          对隐私政策有疑问，或想行使查看、注销等权利，请发邮件到
+          <a href="mailto:chester@chesterlee.cn">chester@chesterlee.cn</a>。
+          服务规则见 <a href="terms.html">用户协议</a>。
+        </p>
+      </section>
+
+      <footer class="ac-foot">
+        <span>账户中心</span>
+        <span><a href="login.html">返回登录</a> · <a href="terms.html">用户协议</a> · © 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a></span>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

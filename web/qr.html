@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>确认登录 · 账户中心</title>
+  <link rel="stylesheet" href="assets/ac.css?v=20261030b">
+  <script src="assets/theme.js"></script>
+</head>
+<body class="ac-page">
+  <div class="ac-shell">
+    <nav class="ac-top">
+      <span>账户中心</span>
+      <div class="ac-top-nav">
+        <a href="terms.html">用户协议</a>
+        <a href="privacy.html">隐私政策</a>
+      </div>
+    </nav>
+    <hr class="ac-hairline">
+
+    <main class="ac-login">
+      <section class="ac-hero">
+        <p class="ac-eyebrow">Account · 扫码登录</p>
+        <h1 class="ac-display">确认登录</h1>
+        <p class="ac-lead" id="lead">正在检查登录状态…</p>
+        <p class="ac-lead">确认后，另一台设备会立刻以当前账户登录；这台手机不受影响。</p>
+      </section>
+
+      <section class="ac-authcard" aria-label="确认登录">
+        <div class="is-hidden" id="card">
+          <h2>用这个账户登录？</h2>
+          <p class="ac-authsub" id="who">—</p>
+          <button type="button" class="ac-btn ac-btn-block" id="approve">确认，是我本人</button>
+          <button type="button" class="ac-btn ac-btn-secondary ac-btn-block" id="cancel">取消</button>
+        </div>
+        <p class="ac-msg" id="msg" role="status"></p>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/ac.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var qrId = (new URLSearchParams(location.search).get('c') || '').trim();
+      var lead = document.getElementById('lead');
+      var card = document.getElementById('card');
+      var who = document.getElementById('who');
+      var msg = document.getElementById('msg');
+      var approveBtn = document.getElementById('approve');
+      var cancelBtn = document.getElementById('cancel');
+
+      function say(text, type) {
+        msg.textContent = text || '';
+        msg.className = 'ac-msg' + (type ? ' is-' + type : '');
+      }
+
+      function backToLogin() {
+        location.replace('login.html?next=' + encodeURIComponent('/qr.html?c=' + qrId));
+      }
+
+      if (!/^[a-f0-9]{32}$/.test(qrId)) {
+        lead.textContent = '这个登录链接不完整，请回到电脑上刷新二维码。';
+        return;
+      }
+
+      // 手机上必须先有登录态，才能替电脑确认
+      if (!AC.getToken()) {
+        backToLogin();
+        return;
+      }
+
+      AC.call('me').then(function (me) {
+        lead.textContent = '请确认是你本人在另一台设备上登录。';
+        who.textContent = me.nickname
+          ? me.nickname + (me.emailMasked ? ' · ' + me.emailMasked : '')
+          : (me.emailMasked || me.uid);
+        card.classList.remove('is-hidden');
+      }).catch(function (err) {
+        if (AC.isLoggedOut(err)) {
+          AC.clearToken();
+          backToLogin();
+          return;
+        }
+        lead.textContent = '账户信息读取失败，请回到电脑刷新二维码重试。';
+        say(err.message, 'error');
+      });
+
+      function confirm(approve) {
+        approveBtn.disabled = true;
+        cancelBtn.disabled = true;
+        AC.call('auth.qr.confirm', { qrId: qrId, approve: approve }).then(function (data) {
+          card.classList.add('is-hidden');
+          if (data && data.decision === 'approved') {
+            lead.textContent = '已确认。回到电脑上就会自动登录。';
+            say('这台手机的登录状态没有变化。', 'ok');
+          } else {
+            lead.textContent = '已取消这次登录。';
+            say('如果没有登录，请回到电脑刷新二维码重试。');
+          }
+        }).catch(function (err) {
+          approveBtn.disabled = false;
+          cancelBtn.disabled = false;
+          if (err.code === 'QR_EXPIRED' || err.code === 'QR_USED') {
+            card.classList.add('is-hidden');
+            lead.textContent = '这个二维码已失效，请回到电脑上刷新。';
+          }
+          say(err.message, 'error');
+        });
+      }
+
+      approveBtn.addEventListener('click', function () { confirm(true); });
+      cancelBtn.addEventListener('click', function () { confirm(false); });
+    })();
+  </script>
+</body>
+</html>

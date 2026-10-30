@@ -1,0 +1,1093 @@
+/* account-center 页面样式：类名统一 ac- 前缀，零外部依赖
+   风格：纸张底色 + 黑色细线 + 大字号标题（编辑排版风）
+
+   换肤：结构不动，只换变量。页面 <head> 里同步加载 theme.js，
+   用 ?theme=light|dark&accent=%23rrggbb 指定，存本机后续页面沿用。
+   新增主题只要在这里加一组 html[data-ac-theme="xxx"] 变量覆盖。 */
+
+:root {
+  color-scheme: light;
+  --ac-paper: #f2eee2;
+  --ac-paper-deep: #e9e4d6;
+  --ac-card: #fffdf8;
+  --ac-ink: #14120d;
+  --ac-ink-soft: #3c372d;
+  --ac-muted: #857d71;
+  --ac-line: #ddd5c4;
+  --ac-line-strong: #14120d;
+  --ac-red: #e1462b;
+  --ac-accent: var(--ac-red);
+  --ac-danger: #b3261e;
+  --ac-ok: #2f6b4f;
+
+  /* 反色块：主按钮 / 头像 / 选中筛选项 */
+  --ac-solid: #121212;
+  --ac-solid-ink: #ffffff;
+
+  /* 表单与浅底块 */
+  --ac-field: #ffffff;
+  --ac-field-line: #cdc8bc;
+  --ac-field-holder: #a8a49a;
+  --ac-focus-ring: rgba(18, 18, 18, 0.08);
+  --ac-soft: #f7f4ea;
+  --ac-soft-line: #c9c4b6;
+  --ac-cover: #ece8dd;
+  --ac-secondary-line: #c3beb2;
+
+  --ac-shadow: 0 22px 48px rgba(20, 18, 12, 0.08);
+  --ac-overlay: rgba(18, 18, 18, 0.55);
+
+  --ac-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ac-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ac-display: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* 深色主题：给主体是黑色的作品用（登录页、账户页、协议页同色） */
+html[data-ac-theme="dark"] {
+  color-scheme: dark;
+  --ac-paper: #0e0e10;
+  --ac-paper-deep: #1c1c1f;
+  --ac-card: #161618;
+  --ac-ink: #f3f1ea;
+  --ac-ink-soft: #cfcbc2;
+  --ac-muted: #8f8b82;
+  --ac-line: #2c2c31;
+  --ac-line-strong: #f3f1ea;
+  --ac-red: #e2543c;
+  --ac-danger: #ef6d5d;
+  --ac-ok: #6cbb91;
+
+  --ac-solid: #f3f1ea;
+  --ac-solid-ink: #121212;
+
+  --ac-field: #101012;
+  --ac-field-line: #35353b;
+  --ac-field-holder: #6f6b63;
+  --ac-focus-ring: rgba(243, 241, 234, 0.14);
+  --ac-soft: #1d1d20;
+  --ac-soft-line: #3a3a40;
+  --ac-cover: #1d1d20;
+  --ac-secondary-line: #3d3d44;
+
+  --ac-shadow: 0 22px 48px rgba(0, 0, 0, 0.55);
+  --ac-overlay: rgba(0, 0, 0, 0.72);
+}
+
+* { box-sizing: border-box; }
+
+.is-hidden { display: none !important; }
+
+html, body { margin: 0; }
+
+body.ac-page {
+  background: var(--ac-paper);
+  color: var(--ac-ink);
+  font: 16px/1.7 var(--ac-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; }
+
+/* ---------- 骨架 ---------- */
+
+.ac-shell {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 28px 72px;
+}
+
+.ac-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 0 10px;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--ac-ink-soft);
+}
+
+.ac-top a {
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+}
+
+.ac-top a:hover { border-bottom-color: currentColor; }
+
+.ac-top-nav { display: flex; gap: 18px; }
+
+/* 顶部细黑线：参考图的分区语言 */
+.ac-hairline { border: 0; border-top: 1px solid var(--ac-line-strong); margin: 0; }
+.ac-hairline--soft { border-top-color: var(--ac-line); }
+
+/* ---------- 通用排版 ---------- */
+
+.ac-eyebrow {
+  margin: 0 0 18px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ac-accent);
+}
+
+.ac-display {
+  margin: 0;
+  font-family: var(--ac-display);
+  font-size: clamp(42px, 7vw, 76px);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.ac-lead {
+  max-width: 30em;
+  margin: 22px 0 0;
+  color: var(--ac-ink-soft);
+  font-size: 14.5px;
+  line-height: 1.9;
+}
+
+.ac-muted { color: var(--ac-muted); }
+
+/* ---------- 登录页 ---------- */
+
+.ac-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 72px;
+  align-items: start;
+  padding: 64px 0 40px;
+}
+
+.ac-hero { padding-top: 8px; }
+
+.ac-authcard {
+  background: var(--ac-card);
+  border: 1px solid var(--ac-line);
+  box-shadow: var(--ac-shadow);
+  padding: 32px 30px 26px;
+}
+
+.ac-authcard h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ac-authsub {
+  margin: 0 0 22px;
+  color: var(--ac-muted);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+/* 主登录按钮 */
+.ac-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ac-solid-ink);
+  background: var(--ac-solid);
+  border: 1px solid var(--ac-solid);
+  border-radius: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.ac-oauth:hover { opacity: 0.86; }
+
+/* 两个并排的主按钮之间留出间距 */
+.ac-oauth + .ac-oauth { margin-top: 10px; }
+
+/* 扫码登录：手机上不出现（自己扫自己没意义） */
+@media (max-width: 720px) {
+  .ac-qr-entry { display: none; }
+}
+
+/* 扫码面板 */
+.ac-qr-box {
+  display: flex;
+  justify-content: center;
+  padding: 18px;
+  background: var(--ac-field);
+  border: 1px solid var(--ac-field-line);
+}
+
+.ac-qr-box canvas {
+  width: 200px;
+  height: 200px;
+  image-rendering: pixelated;
+}
+
+.ac-qr-state {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--ac-muted);
+  text-align: center;
+}
+
+.ac-qr-state.is-error { color: var(--ac-danger); }
+
+/* 第三方登录：默认浅色，和邮箱登录的主按钮区分开 */
+.ac-oauth-list { display: grid; gap: 10px; margin-top: 10px; }
+
+.ac-oauth.is-ghost {
+  color: var(--ac-ink);
+  background: var(--ac-field);
+  border-color: var(--ac-field-line);
+}
+
+/* 图标：统一线性描边，颜色跟着文字走（深浅主题通用） */
+.ac-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 「其他登录方式」分隔线 */
+.ac-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+  color: var(--ac-muted);
+  font-size: 12px;
+}
+
+.ac-or::before,
+.ac-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--ac-line);
+}
+
+/* 图标格：图标在上、文字在下（账户码 / 6 位码等次要方式） */
+.ac-methods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.ac-method {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 16px 10px 13px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ac-ink);
+  background: var(--ac-field);
+  border: 1px solid var(--ac-field-line);
+  border-radius: 0;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ac-method:hover {
+  border-color: var(--ac-ink);
+  background: var(--ac-paper-deep);
+}
+
+.ac-method .ac-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ac-ink);
+  background: var(--ac-paper-deep);
+}
+
+.ac-chip--oauth {
+  background: var(--ac-paper-deep);
+  color: var(--ac-ink);
+  border: 1px solid var(--ac-line);
+}
+
+.ac-agree {
+  margin: 16px 0 0;
+  color: var(--ac-muted);
+  font-size: 12.5px;
+  text-align: center;
+  line-height: 1.8;
+}
+
+.ac-agree a {
+  color: var(--ac-ink-soft);
+  text-decoration: none;
+  border-bottom: 1px solid var(--ac-line);
+}
+
+.ac-agree a:hover { border-bottom-color: var(--ac-ink); }
+
+/* 返回上一组方式 */
+.ac-back {
+  display: inline-block;
+  margin: 0 0 18px;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ac-muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ac-line);
+  cursor: pointer;
+}
+
+.ac-back:hover { color: var(--ac-ink); border-bottom-color: var(--ac-ink); }
+
+/* ---------- 表单 ---------- */
+
+.ac-panel { display: block; }
+.ac-panel.is-hidden { display: none; }
+
+.ac-field { display: block; margin-bottom: 12px; }
+
+.ac-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ac-muted);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.ac-input {
+  width: 100%;
+  padding: 12px 13px;
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
+  background: var(--ac-field);
+  border: 1px solid var(--ac-field-line);
+  border-radius: 0;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ac-input:focus { border-color: var(--ac-ink); box-shadow: 0 0 0 2px var(--ac-focus-ring); }
+.ac-input::placeholder { color: var(--ac-field-holder); }
+
+.ac-inline { display: flex; gap: 8px; }
+.ac-inline .ac-input { flex: 1 1 auto; min-width: 0; }
+.ac-inline .ac-btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* 邮箱后缀自动补全：输入框下方浮层，键盘可上下选 */
+.ac-suggest-wrap { position: relative; }
+.ac-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  max-height: 216px;
+  overflow-y: auto;
+  background: var(--ac-field);
+  border: 1px solid var(--ac-line-strong);
+  box-shadow: var(--ac-shadow);
+}
+.ac-suggest-item {
+  padding: 9px 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ac-ink);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ac-suggest-item em { font-style: normal; color: var(--ac-muted); }
+.ac-suggest-item.is-active { background: var(--ac-soft); }
+
+/* 图形验证码：左边输入、右边点图换一张 */
+.ac-captcha-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.ac-captcha-row .ac-input { flex: 1 1 auto; min-width: 0; }
+.ac-captcha-img {
+  flex: 0 0 auto;
+  width: 152px;
+  height: 60px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ac-muted);
+  background: var(--ac-field);
+  border: 1px solid var(--ac-field-line);
+  border-radius: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+.ac-captcha-img svg { display: block; width: 152px; height: 60px; }
+.ac-captcha-img:disabled { opacity: 0.6; cursor: default; }
+
+.ac-btn {
+  appearance: none;
+  padding: 12px 18px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ac-solid-ink);
+  background: var(--ac-solid);
+  border: 1px solid var(--ac-solid);
+  border-radius: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.ac-btn:hover { opacity: 0.86; }
+.ac-btn:disabled { opacity: 0.4; cursor: default; }
+.ac-btn-block { display: block; width: 100%; margin-top: 16px; }
+
+.ac-btn-secondary {
+  color: var(--ac-ink);
+  background: transparent;
+  border-color: var(--ac-secondary-line);
+}
+
+.ac-btn-ghost {
+  padding: 6px 0;
+  color: var(--ac-muted);
+  background: transparent;
+  border-color: transparent;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.ac-btn-danger { color: #fff; background: var(--ac-danger); border-color: var(--ac-danger); }
+
+.ac-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ac-actions .ac-btn { flex: 0 1 auto; }
+
+.ac-hint {
+  margin: 10px 0 0;
+  color: var(--ac-muted);
+  font-size: 11.5px;
+  line-height: 1.75;
+}
+
+.ac-hint a { color: var(--ac-ink-soft); text-decoration: none; border-bottom: 1px solid var(--ac-line); }
+
+.ac-msg { min-height: 18px; margin: 12px 0 0; font-size: 12.5px; }
+.ac-msg.is-error { color: var(--ac-danger); }
+.ac-msg.is-ok { color: var(--ac-ok); }
+
+/* ---------- 我的账户 ---------- */
+
+.ac-account { padding-top: 44px; }
+
+.ac-account-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ac-account-head .ac-display { max-width: 12em; }
+
+/* 标题行右侧的返回入口：轻量文字链，不抢标题 */
+.ac-back {
+  flex: 0 0 auto;
+  padding-bottom: 9px;
+  color: var(--ac-muted);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.ac-back:hover {
+  color: var(--ac-ink);
+  border-bottom-color: var(--ac-line-strong);
+}
+
+.ac-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0 22px;
+  margin-top: 24px;
+  border-top: 1px solid var(--ac-line-strong);
+  border-bottom: 1px solid var(--ac-line);
+}
+
+.ac-avatar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  background: var(--ac-solid);
+  color: var(--ac-solid-ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ac-avatar.has-image {
+  background-size: cover;
+  background-position: center;
+  background-color: transparent;
+  color: transparent;
+}
+
+.ac-identity-main { flex: 1 1 auto; min-width: 0; }
+.ac-identity-name-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ac-identity-name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.ac-identity-edit { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.ac-identity-edit .ac-input { flex: 1 1 160px; max-width: 240px; padding: 8px 10px; font-size: 13.5px; }
+.ac-identity-edit .ac-btn { padding: 8px 14px; font-size: 12.5px; }
+.ac-identity-meta { color: var(--ac-muted); font-size: 12px; word-break: break-all; }
+
+.ac-textlink {
+  flex: 0 0 auto;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ac-ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ac-ink);
+  cursor: pointer;
+}
+
+.ac-textlink--muted { color: var(--ac-muted); border-bottom-color: var(--ac-line); }
+.ac-textlink--muted:hover { color: var(--ac-ink); border-bottom-color: var(--ac-ink); }
+
+/* 两栏：账户状态 / 登录方式 */
+.ac-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 28px;
+  align-items: start;
+}
+
+.ac-card {
+  background: var(--ac-card);
+  border: 1px solid var(--ac-line);
+  padding: 28px 30px;
+}
+
+.ac-card + .ac-card { margin-top: 24px; }
+
+/* 两栏并排时顶部对齐，不要继承上面的上下间距 */
+.ac-columns .ac-card + .ac-card { margin-top: 0; }
+
+.ac-section-title {
+  margin: 0 0 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ac-line-strong);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ac-section-sub {
+  margin: -10px 0 16px;
+  color: var(--ac-ink-soft);
+  font-size: 13px;
+}
+
+.ac-status-label { color: var(--ac-muted); font-size: 12px; }
+.ac-status-value {
+  margin: 6px 0 8px;
+  font-family: var(--ac-display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.ac-status-meta { margin: 0 0 22px; color: var(--ac-muted); font-size: 12px; }
+
+.ac-uid {
+  font-family: var(--ac-mono);
+  font-size: 11px;
+  color: var(--ac-muted);
+  word-break: break-all;
+}
+
+/* 登录钥匙 */
+.ac-keylist { margin: 0; }
+
+.ac-key {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--ac-line);
+}
+
+.ac-key:last-child { border-bottom: 0; }
+.ac-key-main { flex: 1 1 auto; min-width: 0; }
+.ac-key-name { font-size: 13.5px; font-weight: 650; line-height: 1.4; }
+.ac-key-sub { color: var(--ac-muted); font-size: 11.5px; word-break: break-all; }
+.ac-key-state { flex: 0 0 auto; color: var(--ac-muted); font-size: 11.5px; }
+.ac-key-state.is-on { color: var(--ac-ok); font-weight: 600; }
+
+/* 登录方式右侧：状态 + 操作 */
+.ac-key-side {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ac-key-connect { color: var(--ac-ok); border-bottom-color: currentColor; }
+.ac-key-connect:hover { color: var(--ac-ok); border-bottom-color: var(--ac-ok); }
+.ac-textlink:disabled { opacity: 0.45; cursor: default; }
+
+/* 账户页：生成账户码后一次性展示 */
+.ac-key-reveal {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px dashed var(--ac-line);
+}
+.ac-key-reveal-label { margin: 0 0 8px; color: var(--ac-muted); font-size: 11.5px; }
+.ac-key-reveal-code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0.5px;
+  word-break: break-all;
+  user-select: all;
+}
+.ac-key-reveal-acts { display: flex; gap: 16px; margin-top: 10px; }
+
+/* 账户页：手机号绑定表单（点「连接」后展开） */
+.ac-phone-bind {
+  margin: 4px 0 0;
+  padding: 16px 0 4px;
+  border-top: 1px dashed var(--ac-line);
+}
+.ac-phone-bind .ac-actions { margin-top: 14px; }
+
+/* ---------- 我的装置 ---------- */
+
+.ac-works { margin-top: 28px; }
+
+.ac-works-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.ac-work {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+
+.ac-work-cover {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  /* 作品图标是深色线条稿，统一垫浅色纸底，暗色主题下也看不清的问题一并解决 */
+  background: #ece8dd;
+  border: 1px solid var(--ac-line);
+}
+
+.ac-work-name {
+  margin-top: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-work-meta {
+  margin-top: 4px;
+  color: var(--ac-ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+
+/* 封面图形：优先用官网作品页同一套 SVG；未收录的作品回退到 CSS 生成 */
+.ac-work-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ac-art { position: absolute; inset: 0; }
+
+.ac-art--1 { background: #f3ead9; }
+.ac-art--1::before {
+  content: "";
+  position: absolute;
+  width: 62%;
+  height: 62%;
+  left: 8%;
+  top: 12%;
+  border-radius: 50%;
+  background: #d3402a;
+}
+.ac-art--1::after {
+  content: "";
+  position: absolute;
+  width: 52%;
+  height: 52%;
+  right: 6%;
+  bottom: 8%;
+  border-radius: 50%;
+  background: #5b3e8e;
+  mix-blend-mode: multiply;
+}
+
+.ac-art--2 { background: #f1ece0; }
+.ac-art--2::before {
+  content: "";
+  position: absolute;
+  width: 72%;
+  height: 72%;
+  left: 14%;
+  top: 14%;
+  border-radius: 50%;
+  background: #d6402a;
+}
+.ac-art--2::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  bottom: 14%;
+  width: 64%;
+  border-top: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.ac-art--3 { background: #111; }
+.ac-art--3::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 20%;
+  width: 58%;
+  height: 58%;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+.ac-art--3::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  width: 22%;
+  height: 22%;
+  background: #d6402a;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.ac-art--4 { background: #efe7d6; }
+.ac-art--4::before {
+  content: "";
+  position: absolute;
+  left: 26%;
+  top: 16%;
+  width: 48%;
+  height: 68%;
+  background: #2f2b28;
+  border-radius: 50% 50% 46% 46%;
+}
+.ac-art--4::after {
+  content: "";
+  position: absolute;
+  left: 30%;
+  top: 20%;
+  width: 40%;
+  height: 60%;
+  border: 1px dashed rgba(240, 233, 217, 0.65);
+  border-radius: 50%;
+}
+
+.ac-art--5 { background: #f3eee1; }
+.ac-art--5::before {
+  content: "";
+  position: absolute;
+  left: 16%;
+  top: 12%;
+  width: 68%;
+  height: 34%;
+  background: #d6a44c;
+  border-radius: 50% 50% 0 0;
+}
+.ac-art--5::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  bottom: 14%;
+  width: 64%;
+  height: 34%;
+  background: repeating-linear-gradient(90deg, #161616 0 6px, transparent 6px 12px);
+}
+
+.ac-art--6 { background: #111; }
+.ac-art--6::before {
+  content: "";
+  position: absolute;
+  left: 16%;
+  top: 22%;
+  width: 28%;
+  height: 56%;
+  background: #f2f0e9;
+  transform: skewY(-14deg);
+}
+.ac-art--6::after {
+  content: "";
+  position: absolute;
+  right: 16%;
+  top: 22%;
+  width: 28%;
+  height: 56%;
+  background: #f2f0e9;
+  transform: skewY(14deg);
+}
+
+.ac-more {
+  display: inline-block;
+  margin-top: 20px;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ac-ink-soft);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ac-line);
+  cursor: pointer;
+}
+
+.ac-more:hover { border-bottom-color: var(--ac-ink); }
+
+/* ---------- 跨设备 / 安全 / 注销 ---------- */
+
+.ac-code-box {
+  margin-top: 16px;
+  padding: 20px;
+  text-align: center;
+  background: var(--ac-soft);
+  border: 1px dashed var(--ac-soft-line);
+}
+
+.ac-code {
+  font-family: var(--ac-mono);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 9px;
+  padding-left: 9px;
+}
+
+.ac-code-time { margin-top: 6px; color: var(--ac-muted); font-size: 11.5px; }
+
+.ac-links { margin: 0; padding: 0; list-style: none; }
+
+.ac-links li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--ac-line);
+  font-size: 12.5px;
+}
+
+.ac-links li:last-child { border-bottom: 0; }
+.ac-links a { text-decoration: none; border-bottom: 1px solid var(--ac-line); }
+.ac-links a:hover { border-bottom-color: var(--ac-ink); }
+.ac-links span { color: var(--ac-muted); font-size: 11.5px; }
+
+.ac-dangerzone {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ac-line);
+}
+
+.ac-empty { color: var(--ac-muted); font-size: 12.5px; padding: 8px 0; }
+
+.ac-foot {
+  margin: 40px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--ac-line);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ac-muted);
+  font-size: 13px;
+}
+
+.ac-foot a { color: var(--ac-ink-soft); text-decoration: none; border-bottom: 1px solid var(--ac-line); }
+.ac-foot a:hover { border-bottom-color: var(--ac-ink); }
+
+/* ---------- 协议 / 隐私页 ---------- */
+
+.ac-doc { max-width: 780px; padding: 56px 0 40px; }
+
+.ac-doc-title {
+  margin: 0;
+  font-family: var(--ac-display);
+  font-size: clamp(36px, 6vw, 56px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.ac-doc-lead {
+  margin: 20px 0 0;
+  color: var(--ac-ink-soft);
+  font-size: 14.5px;
+  line-height: 1.9;
+}
+
+.ac-doc section {
+  padding: 26px 0;
+  border-top: 1px solid var(--ac-line);
+}
+
+.ac-doc section:first-of-type { margin-top: 44px; border-top-color: var(--ac-line-strong); }
+
+.ac-doc h2 {
+  margin: 0 0 10px;
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.ac-doc p {
+  margin: 0;
+  color: var(--ac-ink-soft);
+  font-size: 13.5px;
+  line-height: 1.95;
+}
+
+.ac-doc p + p { margin-top: 8px; }
+
+.ac-doc ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--ac-ink-soft);
+  font-size: 13.5px;
+  line-height: 1.95;
+}
+
+.ac-doc li + li { margin-top: 4px; }
+
+.ac-doc a { color: var(--ac-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+.ac-doc-meta { margin: 10px 0 0; color: var(--ac-muted); font-size: 11.5px; }
+
+/* ---------- 账户凭证弹层 ---------- */
+
+.ac-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--ac-overlay);
+}
+
+.ac-modal-box {
+  width: 100%;
+  max-width: 420px;
+  max-height: 92vh;
+  overflow: auto;
+  padding: 20px;
+  background: var(--ac-card);
+  border: 1px solid var(--ac-line-strong);
+}
+
+.ac-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.ac-modal-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ac-muted);
+  font-size: 24px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.ac-credential-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--ac-line);
+}
+
+.ac-modal .ac-actions { margin-top: 12px; }
+.ac-modal .ac-btn { flex: 1 1 auto; text-align: center; text-decoration: none; }
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 960px) {
+  .ac-login { grid-template-columns: minmax(0, 1fr); gap: 36px; padding-top: 36px; }
+  .ac-hero { padding-top: 0; }
+  .ac-authcard { max-width: 480px; }
+  .ac-works-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .ac-shell { padding: 0 18px 56px; }
+  .ac-columns { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .ac-card { padding: 22px 20px; }
+  .ac-identity { flex-wrap: wrap; }
+  .ac-works-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .ac-code { font-size: 28px; letter-spacing: 6px; padding-left: 6px; }
+  .ac-doc { padding-top: 36px; }
+}
+
+@media (max-width: 380px) {
+  .ac-oauth { font-size: 13px; }
+}

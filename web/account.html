@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>我的账户 · 账户中心</title>
+  <link rel="stylesheet" href="assets/ac.css?v=20261030b">
+  <script src="assets/theme.js"></script>
+</head>
+<body class="ac-page">
+  <div class="ac-shell">
+    <nav class="ac-top">
+      <span>账户中心</span>
+      <div class="ac-top-nav">
+        <a href="https://chesterlee.cn/">个人网站</a>
+        <a href="terms.html">用户协议</a>
+        <a href="privacy.html">隐私政策</a>
+      </div>
+    </nav>
+    <hr class="ac-hairline">
+
+    <main class="ac-account">
+      <header class="ac-account-head">
+        <div>
+          <p class="ac-eyebrow">Account · 账户</p>
+          <h1 class="ac-display">我的账户</h1>
+        </div>
+        <a class="ac-back" id="back-link" href="https://chesterlee.cn/">← 返回作品页</a>
+      </header>
+
+      <section class="ac-identity">
+        <button type="button" class="ac-avatar" id="avatar-initial" title="更换头像" aria-label="更换头像">A</button>
+        <input type="file" id="avatar-file" accept="image/*" class="is-hidden">
+        <div class="ac-identity-main">
+          <div class="ac-identity-name-row">
+            <span class="ac-identity-name" id="nickname">正在加载…</span>
+            <button type="button" class="ac-textlink ac-textlink--muted" id="nickname-edit">编辑</button>
+            <button type="button" class="ac-textlink ac-textlink--muted" id="avatar-edit">换头像</button>
+          </div>
+          <div class="ac-identity-edit is-hidden" id="nickname-edit-box">
+            <input class="ac-input" id="nickname-input" type="text" maxlength="20" autocomplete="off" placeholder="给自己起个昵称">
+            <button type="button" class="ac-btn" id="nickname-save">保存</button>
+            <button type="button" class="ac-btn ac-btn-secondary" id="nickname-cancel">取消</button>
+          </div>
+          <div class="ac-identity-meta" id="subtitle">—</div>
+        </div>
+        <button type="button" class="ac-textlink" id="logout">退出登录</button>
+      </section>
+
+      <div class="ac-columns">
+        <section class="ac-card">
+          <h2 class="ac-section-title">账户状态</h2>
+          <div class="ac-status-label">当前状态</div>
+          <div class="ac-status-value">账户正常</div>
+          <p class="ac-status-meta"><span id="created-at">—</span> 起 · 长期有效</p>
+
+          <div class="ac-actions">
+            <button type="button" class="ac-btn ac-btn-secondary" id="save-credential">生成账户凭证</button>
+          </div>
+          <p class="ac-hint">换设备或忘记账号时，扫凭证上的二维码（或填凭证上的邮箱）收验证码就能登录。凭证只含邮箱与 uid，不含账户码。</p>
+          <p class="ac-hint">uid：<span class="ac-uid" id="uid">—</span></p>
+        </section>
+
+        <section class="ac-card">
+          <h2 class="ac-section-title">登录方式</h2>
+          <p class="ac-section-sub">添加后，用其中任意一种都能登录这个账户。</p>
+          <div class="ac-keylist" id="keys"></div>
+          <div class="ac-key-reveal is-hidden" id="code-reveal">
+            <p class="ac-key-reveal-label">你的账户码（只显示这一次，请保存好；它和密码一样，别转发）</p>
+            <code class="ac-key-reveal-code" id="code-value"></code>
+            <div class="ac-key-reveal-acts">
+              <button type="button" class="ac-textlink" id="code-copy">复制</button>
+              <button type="button" class="ac-textlink ac-textlink--muted" id="code-close">我已保存</button>
+            </div>
+          </div>
+
+          <!-- 绑定手机号：点「连接」展开 -->
+          <form class="ac-phone-bind is-hidden" id="phone-bind" novalidate>
+            <label class="ac-field">
+              <span class="ac-label">手机号</span>
+              <input class="ac-input" id="bind-phone" type="tel" inputmode="numeric" maxlength="11"
+                     autocomplete="tel" placeholder="中国大陆 11 位手机号">
+            </label>
+            <div class="ac-captcha-row">
+              <input class="ac-input" id="bind-captcha" type="text" inputmode="numeric" maxlength="4"
+                     autocomplete="off" placeholder="图形验证码">
+              <button type="button" class="ac-captcha-img" id="bind-captcha-img"
+                      title="看不清？换一张" aria-label="换一张图形验证码"></button>
+            </div>
+            <div class="ac-inline">
+              <input class="ac-input" id="bind-code" type="text" inputmode="numeric" maxlength="6"
+                     autocomplete="one-time-code" placeholder="6 位验证码">
+              <button type="button" class="ac-btn ac-btn-secondary" id="bind-send">发送验证码</button>
+            </div>
+            <p class="ac-hint">验证码 10 分钟内有效；同一号码每天最多获取 10 次。</p>
+            <div class="ac-actions">
+              <button type="submit" class="ac-btn" id="bind-submit">确认绑定</button>
+              <button type="button" class="ac-btn ac-btn-secondary" id="bind-cancel">取消</button>
+            </div>
+          </form>
+
+          <p class="ac-hint">至少保留一种登录方式；同一个第三方账号只能绑定一个账户。</p>
+        </section>
+      </div>
+
+      <section class="ac-card ac-works">
+        <h2 class="ac-section-title">我的作品</h2>
+        <p class="ac-section-sub">已开通的作品。点开即可进入，不用再登录。</p>
+        <div class="ac-works-grid" id="products"></div>
+        <button type="button" class="ac-more is-hidden" id="toggle-works">展开其余</button>
+      </section>
+
+      <div class="ac-columns">
+        <section class="ac-card">
+          <h2 class="ac-section-title">跨设备登录</h2>
+          <p class="ac-section-sub">在另一台设备打开登录页，选择「6 位码」，输入下面这串数字。</p>
+          <div class="ac-actions">
+            <button type="button" class="ac-btn ac-btn-secondary" id="make-code">生成 6 位码</button>
+          </div>
+          <div class="ac-code-box is-hidden" id="code-box">
+            <div class="ac-code" id="code-value">------</div>
+            <div class="ac-code-time" id="code-time"></div>
+          </div>
+          <p class="ac-hint">10 分钟内有效，且只能用一次。旧码在生成新码时立即作废。</p>
+        </section>
+
+        <section class="ac-card">
+          <h2 class="ac-section-title">隐私与安全</h2>
+          <p class="ac-section-sub">账户码等同密码；换设备优先用 6 位码，不要转发账户码。</p>
+          <ul class="ac-links">
+            <li><a href="privacy.html">隐私政策</a><span>数据怎么收集与使用</span></li>
+            <li><a href="terms.html">用户协议</a><span>服务规则与边界</span></li>
+            <li><a href="privacy.html#security">账户安全说明</a><span>HTTPS · 限流 · 失败锁定</span></li>
+          </ul>
+
+          <div class="ac-dangerzone">
+            <div class="ac-actions">
+              <button type="button" class="ac-btn ac-btn-secondary" id="logout-all">退出全部设备</button>
+              <button type="button" class="ac-btn ac-btn-ghost" id="toggle-delete">注销账号…</button>
+            </div>
+            <p class="ac-hint">「退出全部设备」会让所有设备（包括插件、小程序）重新登录。</p>
+            <div class="is-hidden" id="delete-box">
+              <label class="ac-field">
+                <span class="ac-label">注销后钥匙全部解除绑定，且无法恢复。请输入「注销」确认：</span>
+                <input class="ac-input" id="delete-confirm" type="text" autocomplete="off" placeholder="注销">
+              </label>
+              <button type="button" class="ac-btn ac-btn-danger ac-btn-block" id="delete-submit">永久注销</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <p class="ac-msg" id="msg" role="status"></p>
+
+      <footer class="ac-foot">
+        <span>各作品的跑步 / 阅读等业务数据不在账户中心，注销这里不会删除它们。</span>
+        <span><a href="mailto:chester@chesterlee.cn">反馈问题或建议 →</a> · © 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a></span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="ac-modal is-hidden" id="credential-modal" role="dialog" aria-modal="true" aria-label="账户凭证">
+    <div class="ac-modal-box">
+      <div class="ac-modal-head">
+        <strong>账户凭证</strong>
+        <button type="button" class="ac-modal-close" id="credential-close" aria-label="关闭">×</button>
+      </div>
+      <img class="ac-credential-img" id="credential-img" alt="账户凭证图片">
+      <p class="ac-hint">手机上长按图片可保存到相册；也可以点下面的按钮。</p>
+      <div class="ac-actions">
+        <button type="button" class="ac-btn" id="credential-save">保存到相册</button>
+        <a class="ac-btn ac-btn-secondary" id="credential-download" download>下载图片</a>
+      </div>
+      <p class="ac-hint">图片含完整邮箱，只给自己保存，别发到公开的地方。</p>
+    </div>
+  </div>
+
+  <script src="assets/ac.js"></script>
+  <script src="assets/qrcode.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var AC = window.AC;
+      var msg = document.getElementById('msg');
+      var codeTimer = null;
+      var allProducts = [];
+      var worksExpanded = false;
+      var currentNickname = '';
+      var avatarUrl = '';
+      var emailMasked = '';
+      var phoneMasked = '';
+
+      function showMsg(text, type) {
+        msg.textContent = text || '';
+        msg.className = 'ac-msg' + (type ? ' is-' + type : '');
+      }
+
+      function pad(n) { return n < 10 ? '0' + n : String(n); }
+
+      function fmtDate(ms) {
+        if (!ms) return '—';
+        var d = new Date(ms);
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      }
+
+      function fmtDateTime(ms) {
+        if (!ms) return '—';
+        var d = new Date(ms);
+        return fmtDate(ms) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      }
+
+      /* 登录方式在页面上的名字与图标 */
+      var KEY_LABELS = {
+        email: { name: '邮箱', chip: '邮', cls: 'mail' },
+        phone: { name: '手机号', chip: '机', cls: 'phone' },
+        device: { name: '账户码', chip: '码', cls: 'phone' }
+      };
+      var OAUTH_META = {
+        github: { name: 'GitHub', chip: 'GH' },
+        gitee: { name: 'Gitee', chip: 'GE' },
+        microsoft: { name: 'Microsoft', chip: 'MS' }
+      };
+      var OAUTH_ERRORS = {
+        denied: '你取消了第三方授权，没有绑定任何账号',
+        state: '授权已过期，请重新点一次绑定',
+        provider: '第三方平台返回异常，请稍后重试',
+        key_taken: '这个第三方账号已绑定到另一个账户，无法重复绑定',
+        not_configured: '该登录方式暂未开放',
+        internal: '绑定失败，请稍后重试'
+      };
+
+      function keyInfo(key) {
+        if (key.kind === 'oauth') {
+          var meta = OAUTH_META[key.provider];
+          return meta
+            ? { name: meta.name, chip: meta.chip, cls: 'oauth' }
+            : { name: key.provider || '第三方', chip: 'O', cls: 'oauth' };
+        }
+        return KEY_LABELS[key.kind] || {
+          name: key.kind || '未知',
+          chip: String(key.kind || '?').slice(0, 1),
+          cls: 'phone'
+        };
+      }
+
+      function dropParam(name) {
+        var url = new URL(location.href);
+        if (!url.searchParams.has(name)) return;
+        url.searchParams.delete(name);
+        history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash);
+      }
+
+      function fail(err) {
+        if (AC.isLoggedOut(err)) {
+          AC.goLogin();
+          return true;
+        }
+        showMsg(err.message, 'error');
+        return false;
+      }
+
+      /* ---------- 头像 ---------- */
+      function paintAvatar(dataUrl, letter) {
+        var el = document.getElementById('avatar-initial');
+        if (dataUrl) {
+          el.style.backgroundImage = 'url("' + dataUrl + '")';
+          el.classList.add('has-image');
+          el.textContent = '';
+          return;
+        }
+        el.style.backgroundImage = '';
+        el.classList.remove('has-image');
+        if (letter !== undefined) el.textContent = letter;
+      }
+
+      /** 选中的图片压成 160×160 JPEG，避免把大图塞进账户数据 */
+      function compressAvatar(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onerror = function () { reject(new Error('读取图片失败，换一张试试')); };
+          reader.onload = function () {
+            var img = new Image();
+            img.onerror = function () { reject(new Error('这张图片打不开，换一张试试')); };
+            img.onload = function () {
+              var size = 160;
+              var canvas = document.createElement('canvas');
+              canvas.width = size;
+              canvas.height = size;
+              var ctx = canvas.getContext('2d');
+              var scale = Math.max(size / img.width, size / img.height);
+              var w = img.width * scale;
+              var h = img.height * scale;
+              ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+              resolve(canvas.toDataURL('image/jpeg', 0.82));
+            };
+            img.src = reader.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      var avatarBtn = document.getElementById('avatar-initial');
+      var avatarFile = document.getElementById('avatar-file');
+
+      avatarBtn.addEventListener('click', function () {
+        avatarFile.click();
+      });
+
+      document.getElementById('avatar-edit').addEventListener('click', function () {
+        avatarFile.click();
+      });
+
+      avatarFile.addEventListener('change', async function () {
+        var file = avatarFile.files && avatarFile.files[0];
+        avatarFile.value = '';
+        if (!file) return;
+
+        try {
+          var dataUrl = await compressAvatar(file);
+          var saved = await AC.call('account.profile', { avatar: dataUrl });
+          avatarUrl = saved.avatar || '';
+          paintAvatar(avatarUrl);
+          showMsg('头像已更新，所有作品都会显示这张', 'ok');
+        } catch (err) {
+          fail(err);
+        }
+      });
+
+      function makeKeyRow(info, sub, opts) {
+        opts = opts || {};
+
+        var row = document.createElement('div');
+        row.className = 'ac-key';
+
+        var chip = document.createElement('span');
+        chip.className = 'ac-chip ac-chip--' + info.cls;
+        chip.textContent = info.chip;
+        chip.setAttribute('aria-hidden', 'true');
+
+        var main = document.createElement('div');
+        main.className = 'ac-key-main';
+        var name = document.createElement('div');
+        name.className = 'ac-key-name';
+        name.textContent = info.name;
+        main.appendChild(name);
+        if (sub) {
+          var subEl = document.createElement('div');
+          subEl.className = 'ac-key-sub';
+          subEl.textContent = sub;
+          main.appendChild(subEl);
+        }
+
+        var side = document.createElement('div');
+        side.className = 'ac-key-side';
+
+        if (opts.bound) {
+          if (opts.onUnbind) {
+            var unbindBtn = document.createElement('button');
+            unbindBtn.type = 'button';
+            unbindBtn.className = 'ac-textlink ac-textlink--muted';
+            unbindBtn.textContent = '解绑';
+            if (!opts.canUnbind) {
+              unbindBtn.disabled = true;
+              unbindBtn.title = '至少要保留一种登录方式';
+            }
+            unbindBtn.addEventListener('click', function (event) {
+              opts.onUnbind(event.currentTarget);
+            });
+            side.appendChild(unbindBtn);
+          }
+
+          var stateEl = document.createElement('span');
+          stateEl.className = 'ac-key-state is-on';
+          stateEl.textContent = '已连接';
+          side.appendChild(stateEl);
+        } else if (opts.onBind) {
+          var bindBtn = document.createElement('button');
+          bindBtn.type = 'button';
+          bindBtn.className = 'ac-textlink ac-key-connect';
+          bindBtn.textContent = '连接';
+          bindBtn.addEventListener('click', function (event) {
+            opts.onBind(event.currentTarget);
+          });
+          side.appendChild(bindBtn);
+        } else {
+          var offEl = document.createElement('span');
+          offEl.className = 'ac-key-state';
+          offEl.textContent = '未连接';
+          side.appendChild(offEl);
+        }
+
+        row.appendChild(chip);
+        row.appendChild(main);
+        row.appendChild(side);
+        return row;
+      }
+
+      /** 解绑前二次确认；成功后重新拉取列表 */
+      async function unbindKey(entry, btn) {
+        var label = entry.info.name;
+        if (!window.confirm('解绑「' + label + '」后，它就不能再用来登录这个账户了。确定解绑？')) return;
+        btn.disabled = true;
+        try {
+          await AC.call('account.unbind', { kind: entry.kind, provider: entry.provider || '' });
+          showMsg('已解绑' + label, 'ok');
+          await loadMe();
+        } catch (err) {
+          btn.disabled = false;
+          fail(err);
+        }
+      }
+
+      function bindProvider(entry, btn) {
+        btn.disabled = true;
+        showMsg('正在跳转到 ' + entry.info.name + '…');
+        AC.call('auth.oauth.start', {
+          provider: entry.provider,
+          mode: 'bind',
+          returnUrl: location.origin + location.pathname
+        }).then(function (started) {
+          location.href = started.url;
+        }).catch(function (err) {
+          btn.disabled = false;
+          fail(err);
+        });
+      }
+
+      /* 账户码：服务端生成，完整值只展示这一次 */
+      var codeReveal = document.getElementById('code-reveal');
+      var codeValue = document.getElementById('code-value');
+
+      async function generateAccountCode(entry, btn) {
+        var sure = window.confirm('生成后账户码只显示一次，请当场存好；之前生成过的账户码会立即失效。继续？');
+        if (!sure) return;
+        btn.disabled = true;
+        try {
+          var data = await AC.call('account.code.generate');
+          codeValue.textContent = data.accountCode || '';
+          codeReveal.classList.remove('is-hidden');
+          showMsg('账户码已生成，请立即保存', 'ok');
+          await loadMe();
+        } catch (err) {
+          btn.disabled = false;
+          fail(err);
+        }
+      }
+
+      document.getElementById('code-copy').addEventListener('click', function () {
+        var text = codeValue.textContent || '';
+        if (!text) return;
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+          showMsg('复制失败，请手动选中复制', 'error');
+          return;
+        }
+        navigator.clipboard.writeText(text).then(function () {
+          showMsg('账户码已复制', 'ok');
+        }).catch(function () {
+          showMsg('复制失败，请手动选中复制', 'error');
+        });
+      });
+
+      document.getElementById('code-close').addEventListener('click', function () {
+        codeReveal.classList.add('is-hidden');
+        codeValue.textContent = '';
+      });
+
+      /* 手机号绑定：图形验证码 + 短信验证码，走 auth.sms.verify 的 bind 模式 */
+      var phoneBindBox = document.getElementById('phone-bind');
+      var bindPhoneInput = document.getElementById('bind-phone');
+      var bindCaptchaInput = document.getElementById('bind-captcha');
+      var bindCaptchaBtn = document.getElementById('bind-captcha-img');
+      var bindCodeInput = document.getElementById('bind-code');
+      var bindSendBtn = document.getElementById('bind-send');
+      var bindSubmitBtn = document.getElementById('bind-submit');
+      var bindCooldownTimer = null;
+      var bindCaptchaLoading = false;
+
+      function stopBindCooldown() {
+        if (bindCooldownTimer) {
+          clearInterval(bindCooldownTimer);
+          bindCooldownTimer = null;
+        }
+        bindSendBtn.disabled = false;
+        bindSendBtn.textContent = '发送验证码';
+      }
+
+      function startBindCooldown(seconds) {
+        var left = Number(seconds) || 60;
+        if (bindCooldownTimer) clearInterval(bindCooldownTimer);
+        bindSendBtn.disabled = true;
+        bindSendBtn.textContent = left + ' 秒后重发';
+        bindCooldownTimer = setInterval(function () {
+          left -= 1;
+          if (left <= 0) {
+            stopBindCooldown();
+            return;
+          }
+          bindSendBtn.textContent = left + ' 秒后重发';
+        }, 1000);
+      }
+
+      async function refreshBindCaptcha() {
+        if (bindCaptchaLoading) return;
+        bindCaptchaLoading = true;
+        bindCaptchaBtn.disabled = true;
+        try {
+          var data = await AC.call('auth.captcha');
+          bindCaptchaBtn.innerHTML = data.svg;
+          bindCaptchaBtn.dataset.captchaId = data.id;
+          bindCaptchaInput.value = '';
+        } catch (err) {
+          bindCaptchaBtn.textContent = '点此重试';
+        } finally {
+          bindCaptchaBtn.disabled = false;
+          bindCaptchaLoading = false;
+        }
+      }
+
+      function openPhoneBind() {
+        bindPhoneInput.value = '';
+        bindCodeInput.value = '';
+        stopBindCooldown();
+        phoneBindBox.classList.remove('is-hidden');
+        bindPhoneInput.focus();
+        refreshBindCaptcha();
+      }
+
+      function closePhoneBind() {
+        phoneBindBox.classList.add('is-hidden');
+        stopBindCooldown();
+      }
+
+      bindCaptchaBtn.addEventListener('click', refreshBindCaptcha);
+
+      bindPhoneInput.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 11);
+      });
+
+      bindSendBtn.addEventListener('click', async function () {
+        var phone = bindPhoneInput.value.trim();
+        var captchaCode = bindCaptchaInput.value.trim();
+        var captchaId = bindCaptchaBtn.dataset.captchaId || '';
+
+        if (!/^1[3-9]\d{9}$/.test(phone)) return showMsg('请输入正确的中国大陆手机号', 'error');
+        if (!/^\d{4}$/.test(captchaCode)) return showMsg('请先填写图形验证码', 'error');
+        if (!captchaId) return showMsg('图形验证码没加载出来，点一下图换一张', 'error');
+
+        bindSendBtn.disabled = true;
+        showMsg('正在发送…');
+        try {
+          var data = await AC.call('auth.sms.send', {
+            phone: phone,
+            captchaId: captchaId,
+            captchaCode: captchaCode
+          });
+          showMsg('验证码已发到 ' + (data.masked || phone) + '，10 分钟内有效', 'ok');
+          startBindCooldown(data.cooldown || 60);
+          refreshBindCaptcha();
+        } catch (err) {
+          bindSendBtn.disabled = false;
+          if (err.code === 'CAPTCHA_INVALID') refreshBindCaptcha();
+          if (err.code === 'RATE_LIMITED' && err.retryAfter) startBindCooldown(err.retryAfter);
+          showMsg(err.message, 'error');
+        }
+      });
+
+      document.getElementById('phone-bind').addEventListener('submit', async function (event) {
+        event.preventDefault();
+        var phone = bindPhoneInput.value.trim();
+        var code = bindCodeInput.value.trim();
+
+        if (!/^1[3-9]\d{9}$/.test(phone)) return showMsg('请输入正确的中国大陆手机号', 'error');
+        if (!/^\d{6}$/.test(code)) return showMsg('请填写 6 位验证码', 'error');
+
+        bindSubmitBtn.disabled = true;
+        showMsg('正在绑定…');
+        try {
+          await AC.call('auth.sms.verify', { phone: phone, code: code, bind: true });
+          closePhoneBind();
+          showMsg('手机号已绑定', 'ok');
+          await loadMe();
+        } catch (err) {
+          fail(err);
+        } finally {
+          bindSubmitBtn.disabled = false;
+        }
+      });
+
+      document.getElementById('bind-cancel').addEventListener('click', closePhoneBind);
+
+      async function loadMe() {
+        var me;
+        try {
+          me = await AC.call('me');
+        } catch (err) {
+          fail(err);
+          return;
+        }
+
+        var name = me.nickname || '未设置昵称';
+        currentNickname = me.nickname || '';
+        emailMasked = me.emailMasked || '';
+        phoneMasked = me.phoneMasked || '';
+        document.getElementById('nickname').textContent = name;
+        document.getElementById('subtitle').textContent = emailMasked || phoneMasked || '还没有绑定登录方式';
+        avatarUrl = me.avatar || '';
+        paintAvatar(avatarUrl, (currentNickname || emailMasked || 'A').trim().slice(0, 1).toUpperCase());
+        document.getElementById('uid').textContent = me.uid || '—';
+        document.getElementById('created-at').textContent = fmtDate(me.createdAt);
+
+        var keys = me.keys || [];
+        var emailKey = keys.filter(function (key) { return key.kind === 'email'; })[0] || null;
+        var phoneKey = keys.filter(function (key) { return key.kind === 'phone'; })[0] || null;
+        var deviceKey = keys.filter(function (key) { return key.kind === 'device'; })[0] || null;
+        var oauthKeys = keys.filter(function (key) { return key.kind === 'oauth'; });
+
+        // 短信通道没配置时，未绑定的手机号不显示（已绑定的仍可看到并解绑）
+        var smsEnabled = false;
+        try {
+          var methods = await AC.call('auth.methods');
+          smsEnabled = Boolean(methods && methods.sms);
+        } catch (err) {
+          // 拿不到能力清单时按未开放处理
+        }
+
+        // 邮箱 / 手机号 / 账户码固定占前三行，第三方按「已绑定 → 已启用但未绑定」排列
+        var rows = [
+          {
+            info: KEY_LABELS.email,
+            sub: emailKey ? emailKey.masked : '还没有绑定邮箱',
+            bound: Boolean(emailKey),
+            kind: 'email'
+          }
+        ];
+
+        if (phoneKey || smsEnabled) {
+          rows.push({
+            info: KEY_LABELS.phone,
+            sub: phoneKey ? phoneKey.masked : '还没有绑定手机号',
+            bound: Boolean(phoneKey),
+            kind: 'phone'
+          });
+        }
+
+        rows.push({
+          info: KEY_LABELS.device,
+          sub: deviceKey ? deviceKey.masked : '还没有账户码，可一键生成',
+          bound: Boolean(deviceKey),
+          kind: 'device'
+        });
+
+        oauthKeys.forEach(function (key) {
+          rows.push({
+            info: keyInfo(key),
+            sub: key.masked,
+            bound: true,
+            kind: 'oauth',
+            provider: key.provider || ''
+          });
+        });
+
+        var providers = [];
+        try {
+          var data = await AC.call('auth.oauth.providers');
+          providers = data.providers || [];
+        } catch (err) {
+          // 平台清单拿不到时只显示已绑定的方式
+        }
+
+        providers.forEach(function (item) {
+          var already = oauthKeys.some(function (key) { return key.provider === item.id; });
+          if (already) return;
+          var meta = OAUTH_META[item.id];
+          rows.push({
+            info: meta
+              ? { name: meta.name, chip: meta.chip, cls: 'oauth' }
+              : { name: item.name || item.id, chip: 'O', cls: 'oauth' },
+            sub: '还没有绑定',
+            bound: false,
+            kind: 'oauth',
+            provider: item.id
+          });
+        });
+
+        var keysBox = document.getElementById('keys');
+        keysBox.textContent = '';
+        var canUnbind = keys.length > 1;
+
+        rows.forEach(function (entry) {
+          var opts = { bound: entry.bound };
+          if (entry.bound) {
+            opts.canUnbind = canUnbind;
+            opts.onUnbind = function (btn) { unbindKey(entry, btn); };
+          } else if (entry.kind === 'oauth') {
+            opts.onBind = function (btn) { bindProvider(entry, btn); };
+          } else if (entry.kind === 'phone') {
+            opts.onBind = function () { openPhoneBind(); };
+          } else if (entry.kind === 'device') {
+            opts.onBind = function (btn) { generateAccountCode(entry, btn); };
+          }
+          keysBox.appendChild(makeKeyRow(entry.info, entry.sub, opts));
+        });
+      }
+
+      /* 个人资料：目前只开放昵称，改完立即刷新头像首字 */
+      var nicknameEditBtn = document.getElementById('nickname-edit');
+      var nicknameBox = document.getElementById('nickname-edit-box');
+      var nicknameInput = document.getElementById('nickname-input');
+
+      function closeNicknameEdit() {
+        nicknameBox.classList.add('is-hidden');
+        nicknameEditBtn.classList.remove('is-hidden');
+      }
+
+      nicknameEditBtn.addEventListener('click', function () {
+        nicknameInput.value = currentNickname;
+        nicknameBox.classList.remove('is-hidden');
+        nicknameEditBtn.classList.add('is-hidden');
+        nicknameInput.focus();
+      });
+
+      document.getElementById('nickname-cancel').addEventListener('click', closeNicknameEdit);
+
+      nicknameInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') document.getElementById('nickname-save').click();
+        if (event.key === 'Escape') closeNicknameEdit();
+      });
+
+      document.getElementById('nickname-save').addEventListener('click', async function () {
+        var value = nicknameInput.value.trim();
+        if (!value) {
+          showMsg('昵称不能为空', 'error');
+          return;
+        }
+        if (value.length > 20) {
+          showMsg('昵称最多 20 个字', 'error');
+          return;
+        }
+
+        var btn = this;
+        btn.disabled = true;
+        try {
+          var data = await AC.call('account.profile', { nickname: value });
+          currentNickname = data.nickname || value;
+          document.getElementById('nickname').textContent = currentNickname;
+          document.getElementById('avatar-initial').textContent =
+            (currentNickname || emailMasked || 'A').trim().slice(0, 1).toUpperCase();
+          closeNicknameEdit();
+          showMsg('昵称已保存', 'ok');
+        } catch (err) {
+          fail(err);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      /* 我的作品：图标与官网「作品」页保持同一套（assets/img/works/*.svg） */
+      var WORK_ICONS = {
+        wxread: 'weread-enhancer',
+        'math-classics': 'math-classics',
+        'milk-tea-log': 'milk-tea-log',
+        'coros-run': 'coros-run'
+      };
+
+      function renderProducts() {
+        var box = document.getElementById('products');
+        var more = document.getElementById('toggle-works');
+        box.textContent = '';
+
+        if (!allProducts.length) {
+          var empty = document.createElement('p');
+          empty.className = 'ac-empty';
+          empty.textContent = '还没有上架的作品。';
+          box.appendChild(empty);
+          more.classList.add('is-hidden');
+          return;
+        }
+
+        var visible = worksExpanded ? allProducts : allProducts.slice(0, 5);
+        visible.forEach(function (product, index) {
+          var item;
+          var active = product.status === 'active';
+          var url = /^https?:\/\//i.test(product.url || '') ? product.url : '';
+
+          if (active && url) {
+            item = document.createElement('a');
+            item.href = url;
+          } else {
+            item = document.createElement('div');
+          }
+          item.className = 'ac-work';
+
+          var cover = document.createElement('div');
+          cover.className = 'ac-work-cover';
+          var icon = WORK_ICONS[product.appId];
+          if (icon) {
+            var img = document.createElement('img');
+            img.src = '/assets/img/works/' + icon + '.svg';
+            img.alt = '';
+            img.loading = 'lazy';
+            cover.appendChild(img);
+          } else {
+            var art = document.createElement('div');
+            art.className = 'ac-art ac-art--' + (index % 6 + 1);
+            cover.appendChild(art);
+          }
+
+          var name = document.createElement('div');
+          name.className = 'ac-work-name';
+          name.textContent = product.name || product.appId;
+
+          // 可用作品不再显示副文案；只有不可用时给一行状态提示
+          var metaText = active ? (url ? '' : '维护中') : '暂未开通';
+          var meta = null;
+          if (metaText) {
+            meta = document.createElement('div');
+            meta.className = 'ac-work-meta';
+            meta.textContent = metaText;
+          }
+
+          item.appendChild(cover);
+          item.appendChild(name);
+          if (meta) item.appendChild(meta);
+          box.appendChild(item);
+        });
+
+        var rest = allProducts.length - 5;
+        if (rest > 0) {
+          more.classList.remove('is-hidden');
+          more.textContent = worksExpanded ? '收起' : '展开其余 ' + rest + ' 个';
+        } else {
+          more.classList.add('is-hidden');
+        }
+      }
+
+      /* 返回入口：优先回到本次点击进来的作品页，其次回官网 */
+      function syncBackLink() {
+        var link = document.getElementById('back-link');
+        if (!link) return;
+        var pid = new URLSearchParams(location.search).get('productId');
+        var match = null;
+        if (pid) {
+          allProducts.forEach(function (p) {
+            if (p.appId === pid) match = p;
+          });
+        }
+        if (match && /^https?:\/\//i.test(match.url || '')) {
+          link.href = match.url;
+          link.textContent = '← 返回' + (match.name || '作品页');
+          return;
+        }
+        // 没有带 productId 时，用浏览器来源页兜底；同站来源不算
+        var ref = document.referrer;
+        if (ref && ref.indexOf(location.origin + '/') !== 0) link.href = ref;
+      }
+
+      async function loadProducts() {
+        var data;
+        try {
+          data = await AC.call('me.products');
+        } catch (err) {
+          fail(err);
+          return;
+        }
+        // 个人网站不再放进作品列表，改由顶栏固定入口进入
+        allProducts = (data.products || []).filter(function (p) {
+          return p.appId !== 'personal-site';
+        });
+        syncBackLink();
+        renderProducts();
+      }
+
+      syncBackLink();
+
+      document.getElementById('toggle-works').addEventListener('click', function () {
+        worksExpanded = !worksExpanded;
+        renderProducts();
+      });
+
+      /* 账户凭证：画成图片，方便存进相册 */
+      var credentialFile = null;
+      var credentialName = 'account-credential.png';
+
+      function roundRectPath(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.arcTo(x + width, y, x + width, y + height, radius);
+        ctx.arcTo(x + width, y + height, x, y + height, radius);
+        ctx.arcTo(x, y + height, x, y, radius);
+        ctx.arcTo(x, y, x + width, y, radius);
+        ctx.closePath();
+      }
+
+      function wrapText(ctx, text, maxWidth) {
+        var lines = [];
+        var line = '';
+        for (var i = 0; i < text.length; i += 1) {
+          var next = line + text[i];
+          if (line && ctx.measureText(next).width > maxWidth) {
+            lines.push(line);
+            line = text[i];
+          } else {
+            line = next;
+          }
+        }
+        if (line) lines.push(line);
+        return lines;
+      }
+
+      function drawCredential(data) {
+        var W = 720;
+        var scale = 2;
+
+        var SANS = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
+        var MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+        function font(weight, size, mono) {
+          return weight + ' ' + size + 'px ' + (mono ? MONO : SANS);
+        }
+
+        // 先量一下邮箱占几行，画布高度跟着走，避免长邮箱把页脚顶出画布
+        var emailText = data.email || '未绑定邮箱';
+        var probe = document.createElement('canvas').getContext('2d');
+        var emailFontSize = data.email ? 32 : 26;
+        probe.font = font(700, emailFontSize);
+        var emailLines = wrapText(probe, emailText, W - 72 * 2);
+        if (emailLines.length > 2) {
+          emailFontSize = 26;
+          probe.font = font(700, emailFontSize);
+          emailLines = wrapText(probe, emailText, W - 72 * 2);
+        }
+
+        var H = 1080 + Math.max(0, emailLines.length - 1) * 42;
+        var canvas = document.createElement('canvas');
+        canvas.width = W * scale;
+        canvas.height = H * scale;
+
+        var ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+
+        ctx.fillStyle = '#f2f0e9';
+        ctx.fillRect(0, 0, W, H);
+
+        roundRectPath(ctx, 28, 28, W - 56, H - 56, 0);
+        ctx.fillStyle = '#fffefb';
+        ctx.fill();
+        ctx.strokeStyle = '#dbd7cc';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#161616';
+        ctx.fillRect(28, 28, W - 56, 10);
+
+        var x = 72;
+        var maxWidth = W - x * 2;
+        var y = 96;
+
+        ctx.fillStyle = '#d6402a';
+        ctx.font = font(600, 18);
+        ctx.fillText('ACCOUNT · 账户凭证', x, y);
+
+        y += 56;
+        ctx.fillStyle = '#121212';
+        ctx.font = font(700, 42);
+        ctx.fillText('账户凭证', x, y);
+
+        y += 44;
+        ctx.fillStyle = '#75726a';
+        ctx.font = font(400, 21);
+        ctx.fillText('一个账户，进所有作品', x, y);
+
+        y += 38;
+        ctx.strokeStyle = '#161616';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + maxWidth, y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#75726a';
+        ctx.font = font(500, 21);
+        y += 48;
+        ctx.fillText('登录邮箱', x, y);
+
+        var email = data.email || '未绑定邮箱';
+        ctx.font = font(700, emailFontSize);
+        ctx.fillStyle = data.email ? '#121212' : '#75726a';
+        y += 46;
+        emailLines.forEach(function (line) {
+          ctx.fillText(line, x, y);
+          y += 42;
+        });
+
+        y += 6;
+        ctx.strokeStyle = '#dbd7cc';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + maxWidth, y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#75726a';
+        ctx.font = font(500, 21);
+        y += 46;
+        ctx.fillText('uid', x, y);
+
+        ctx.fillStyle = '#121212';
+        ctx.font = font(600, 26, true);
+        y += 40;
+        wrapText(ctx, data.uid || '—', maxWidth).forEach(function (line) {
+          ctx.fillText(line, x, y);
+          y += 36;
+        });
+
+        function meta(label, value) {
+          ctx.fillStyle = '#75726a';
+          ctx.font = font(400, 20);
+          ctx.fillText(label, x, y);
+          ctx.fillStyle = '#121212';
+          ctx.font = font(500, 20);
+          ctx.fillText(String(value || '—'), x + 150, y);
+          y += 38;
+        }
+        y += 34;
+        meta('昵称', data.nickname || '未设置');
+        meta('注册时间', fmtDate(data.createdAt));
+        meta('生成时间', fmtDateTime(Date.now()));
+
+        // 二维码内容：账户中心登录页 + 预填邮箱，扫码后直接进邮箱登录
+        var qr = null;
+        if (data.email) {
+          try {
+            qr = window.ACQR.matrix(
+              'https://account.chesterlee.cn/login.html?e=' + encodeURIComponent(data.email)
+            );
+          } catch (err) {
+            qr = null;
+          }
+        }
+
+        var boxHeight = qr ? 248 : 150;
+        y += 18;
+        roundRectPath(ctx, x, y, maxWidth, boxHeight, 0);
+        ctx.fillStyle = '#f7f3e8';
+        ctx.fill();
+        ctx.strokeStyle = '#ded9cc';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = '#121212';
+        ctx.font = font(600, 21);
+        ctx.fillText('以后怎么用', x + 28, y + 42);
+
+        var qrBox = 180;
+        var textWidth = qr ? maxWidth - 56 - qrBox - 24 : maxWidth - 56;
+        var guide = qr
+          ? '换手机或忘了账号时，用手机相机扫右边的二维码，会自动打开登录页并填好邮箱，收 6 位验证码就能登录。'
+          : '换手机或忘了账号时，打开账户中心登录页，填这个邮箱，收 6 位验证码就能登录。';
+
+        ctx.fillStyle = '#3c3a35';
+        ctx.font = font(400, 19);
+        wrapText(ctx, guide, textWidth)
+          .forEach(function (line, index) {
+            ctx.fillText(line, x + 28, y + 80 + index * 30);
+          });
+
+        if (qr) {
+          var qrX = x + maxWidth - 28 - qrBox;
+          var qrY = y + 32;
+          var quiet = 4;
+          var cell = qrBox / (qr.size + quiet * 2);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(qrX, qrY, qrBox, qrBox);
+          ctx.fillStyle = '#121212';
+          for (var qrRow = 0; qrRow < qr.size; qrRow += 1) {
+            for (var qrCol = 0; qrCol < qr.size; qrCol += 1) {
+              if (qr.matrix[qrRow][qrCol]) {
+                ctx.fillRect(
+                  qrX + (qrCol + quiet) * cell,
+                  qrY + (qrRow + quiet) * cell,
+                  cell + 0.35,
+                  cell + 0.35
+                );
+              }
+            }
+          }
+
+          ctx.fillStyle = '#75726a';
+          ctx.font = font(400, 15);
+          ctx.fillText('微信扫码也能打开', qrX + 8, y + boxHeight - 14);
+        }
+
+        var footerTop = y + boxHeight + 40;
+        ctx.strokeStyle = '#dbd7cc';
+        ctx.beginPath();
+        ctx.moveTo(x, footerTop);
+        ctx.lineTo(x + maxWidth, footerTop);
+        ctx.stroke();
+
+        ctx.fillStyle = '#75726a';
+        ctx.font = font(400, 18);
+        ctx.fillText(
+          qr ? '扫凭证上的二维码，会自动打开登录页并填好邮箱。' : '凭这张图上的邮箱，可在账户中心用验证码登录。',
+          x,
+          footerTop + 32
+        );
+
+        ctx.fillStyle = '#9b978d';
+        ctx.fillText('图片含完整邮箱，请勿公开分享。', x, footerTop + 60);
+
+        return canvas;
+      }
+
+      function dataUrlToFile(dataUrl, name) {
+        return fetch(dataUrl).then(function (res) {
+          return res.blob();
+        }).then(function (blob) {
+          return new File([blob], name, { type: 'image/png' });
+        });
+      }
+
+      function closeCredential() {
+        document.getElementById('credential-modal').classList.add('is-hidden');
+      }
+
+      function downloadCredential() {
+        document.getElementById('credential-download').click();
+        showMsg('已开始下载；手机上也可长按图片保存到相册', 'ok');
+      }
+
+      document.getElementById('save-credential').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        showMsg('正在生成凭证…');
+        try {
+          var data = await AC.call('account.credential');
+          var dataUrl = drawCredential(data).toDataURL('image/png');
+          credentialName = 'account-credential-' + data.uid + '.png';
+
+          document.getElementById('credential-img').src = dataUrl;
+          var link = document.getElementById('credential-download');
+          link.href = dataUrl;
+          link.download = credentialName;
+
+          credentialFile = null;
+          try {
+            credentialFile = await dataUrlToFile(dataUrl, credentialName);
+          } catch (err) {
+            credentialFile = null;
+          }
+
+          document.getElementById('credential-modal').classList.remove('is-hidden');
+          showMsg('');
+        } catch (err) {
+          fail(err);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      document.getElementById('credential-save').addEventListener('click', function () {
+        var canShare = false;
+        if (credentialFile && navigator.canShare && navigator.share) {
+          try {
+            canShare = navigator.canShare({ files: [credentialFile] });
+          } catch (err) {
+            canShare = false;
+          }
+        }
+
+        if (!canShare) {
+          downloadCredential();
+          return;
+        }
+
+        navigator.share({ files: [credentialFile], title: '账户凭证' }).catch(function (err) {
+          if (err && err.name === 'AbortError') return;
+          downloadCredential();
+        });
+      });
+
+      document.getElementById('credential-close').addEventListener('click', closeCredential);
+      document.getElementById('credential-modal').addEventListener('click', function (event) {
+        if (event.target === this) closeCredential();
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeCredential();
+      });
+
+      /* 生成 6 位码（10 分钟倒计时，只显示在本机） */
+      document.getElementById('make-code').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        showMsg('正在生成…');
+        try {
+          var data = await AC.call('auth.code.start');
+          document.getElementById('code-box').classList.remove('is-hidden');
+          document.getElementById('code-value').textContent = data.code;
+          var left = Number(data.expiresIn) || 600;
+
+          if (codeTimer) clearInterval(codeTimer);
+          function tick() {
+            var m = Math.floor(left / 60);
+            var s = left % 60;
+            document.getElementById('code-time').textContent =
+              '剩余 ' + m + ':' + (s < 10 ? '0' + s : s) + '（只能用一次）';
+            if (left <= 0) {
+              clearInterval(codeTimer);
+              codeTimer = null;
+              document.getElementById('code-time').textContent = '已过期，请重新生成';
+              return;
+            }
+            left -= 1;
+          }
+          tick();
+          codeTimer = setInterval(tick, 1000);
+          showMsg('');
+        } catch (err) {
+          fail(err);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      document.getElementById('logout').addEventListener('click', async function () {
+        try {
+          await AC.call('auth.logout');
+        } catch (err) {
+          if (!AC.isLoggedOut(err)) {
+            showMsg(err.message, 'error');
+            return;
+          }
+        }
+        AC.goLogin();
+      });
+
+      document.getElementById('logout-all').addEventListener('click', async function () {
+        if (!window.confirm('确定退出所有设备？全部设备都需要重新登录。')) return;
+        try {
+          await AC.call('auth.logoutAll');
+        } catch (err) {
+          if (!AC.isLoggedOut(err)) {
+            showMsg(err.message, 'error');
+            return;
+          }
+        }
+        AC.goLogin();
+      });
+
+      document.getElementById('toggle-delete').addEventListener('click', function () {
+        document.getElementById('delete-box').classList.toggle('is-hidden');
+      });
+
+      document.getElementById('delete-submit').addEventListener('click', async function () {
+        var input = document.getElementById('delete-confirm');
+        if (input.value.trim() !== '注销') {
+          showMsg('请输入「注销」两个字确认', 'error');
+          return;
+        }
+        if (!window.confirm('注销后无法恢复，确定继续？')) return;
+
+        var btn = this;
+        btn.disabled = true;
+        try {
+          await AC.call('account.delete', { confirm: '注销' });
+          AC.clearToken();
+          location.replace('login.html?deleted=1');
+        } catch (err) {
+          btn.disabled = false;
+          fail(err);
+        }
+      });
+
+      if (!AC.getToken()) {
+        AC.goLogin();
+        return;
+      }
+
+      /* 第三方绑定回跳：显示结果并清掉地址栏参数 */
+      var pageParams = new URLSearchParams(location.search);
+      var boundParam = pageParams.get('oauth_bound');
+      if (boundParam) {
+        var boundMeta = OAUTH_META[boundParam];
+        showMsg(
+          boundParam === 'already' ? '这个第三方账号已经绑定过了' : '已绑定 ' + (boundMeta ? boundMeta.name : boundParam),
+          'ok'
+        );
+        dropParam('oauth_bound');
+      }
+      var oauthErrorParam = pageParams.get('oauth_error');
+      if (oauthErrorParam) {
+        showMsg(OAUTH_ERRORS[oauthErrorParam] || '绑定失败，请稍后重试', 'error');
+        dropParam('oauth_error');
+      }
+
+      loadMe();
+      loadProducts();
+    })();
+  </script>
+</body>
+</html>

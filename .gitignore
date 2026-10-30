@@ -1,0 +1,36 @@
+# 构建产物
+web/dist/
+dist/
+*.zip
+debug.log
+__debug_*
+
+# 私钥（一律不入库）
+*.pem
+
+# 本地开发数据（账户中心 JSON 存储）
+.data/
+*.tmp
+
+# 浏览器自动化现场（Chrome profile / 截图 / 平台密钥中间文件）
+.autoshot/
+
+# 云函数依赖（部署时安装）
+node_modules/
+
+# Trae 本地配置（规则/技能副本由「AI协作规划库」母本同步生成，不入库）
+.trae/
+
+# 个人文件（不入库）
+备忘录.md
+inbox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db

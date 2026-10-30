@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>账户中心</title>
+  <script>
+    // 有登录态进「我的账户」，否则进登录页；主题等参数原样带过去
+    var token = localStorage.getItem('ps_token');
+    location.replace((token ? 'account.html' : 'login.html') + location.search);
+  </script>
+  <noscript><meta http-equiv="refresh" content="0; url=login.html"></noscript>
+  <link rel="stylesheet" href="assets/ac.css?v=20261030b">
+  <script src="assets/theme.js"></script>
+</head>
+<body class="ac-page">
+  <div class="ac-shell">
+    <p class="ac-lead">正在打开账户中心…</p>
+    <footer class="ac-foot">
+      <span>账户中心</span>
+      <span>© 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a></span>
+    </footer>
+  </div>
+</body>
+</html>
