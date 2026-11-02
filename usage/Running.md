@@ -91,7 +91,28 @@ curl -s http://localhost:8942/healthz
 cd /Users/Admin/Knowledge/Coding/account-center
 rsync -az --delete --exclude '.data' --exclude 'node_modules' -e "ssh -i ~/.ssh/chesterlee_web" cloud/ ubuntu@43.136.92.125:/srv/chesterlee/account/cloud/
 rsync -az --delete -e "ssh -i ~/.ssh/chesterlee_web" web/ ubuntu@43.136.92.125:/srv/chesterlee/account/web/
+# 依赖必须与 package.json 对齐：漏装会像 2026-10-29 那样「缺 @alicloud/* 直接起不来」
+ssh -i ~/.ssh/chesterlee_web ubuntu@43.136.92.125 "cd /srv/chesterlee/account/cloud/functions/accountCenter && npm ci --omit=dev"
 ssh -i ~/.ssh/chesterlee_web ubuntu@43.136.92.125 "sudo systemctl restart account-center && systemctl is-active account-center"
+```
+
+**重启后必看**（`is-active` 只代表进程没立刻退出，接口通不通要单独探）：
+
+```bash
+ssh -i ~/.ssh/chesterlee_web ubuntu@43.136.92.125 "curl -s http://127.0.0.1:8940/healthz"   # 期望 {"ok":true}
+```
+
+### 4.0.1 数据备份（已装 cron，2026-11-02）
+
+数据全在 `/var/lib/account-center/store.json` 一个文件，每天 03:20 自动备份到 `/var/backups/account-center/store-<时间>.json`（校验 JSON 后保留最近 7 份，手动放的 `store-pre-deploy-*.json` 不动）。
+
+```bash
+# 装/更新备份脚本（本仓库脚本为源，改完重新推一次）
+ssh -i ~/.ssh/chesterlee_web ubuntu@43.136.92.125 "sudo tee /usr/local/bin/account-backup.sh >/dev/null" < ../部署上线备案/scripts/backup-account-store.sh
+# 手动跑一次
+ssh -i ~/.ssh/chesterlee_web ubuntu@43.136.92.125 "sudo /usr/local/bin/account-backup.sh"
+# 看日志 / 现有备份
+ssh -i ~/.ssh/chesterlee_web ubuntu@43.136.92.125 "tail -n 20 /var/log/account-backup.log; ls -1t /var/backups/account-center | head"
 ```
 
 登记 / 更新作品（会写数据文件，登记后需重启）：
