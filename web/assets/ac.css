@@ -573,6 +573,33 @@ a { color: inherit; }
 .ac-identity-edit { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .ac-identity-edit .ac-input { flex: 1 1 160px; max-width: 240px; padding: 8px 10px; font-size: 13.5px; }
 .ac-identity-edit .ac-btn { padding: 8px 14px; font-size: 12.5px; }
+.ac-suggests { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-basis: 100%; margin-top: 2px; }
+.ac-suggests-label { font-size: 11.5px; letter-spacing: 0.14em; color: var(--ac-ink-soft); }
+.ac-suggest-chip {
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1;
+  padding: 7px 11px;
+  border: 1px solid var(--ac-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ac-ink-soft);
+  cursor: pointer;
+}
+.ac-suggest-chip:hover { border-color: var(--ac-ink); color: var(--ac-ink); }
+.ac-avatar-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+.ac-avatar-option {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 1px solid var(--ac-line);
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+}
+.ac-avatar-option:hover { border-color: var(--ac-ink); }
+@media (min-width: 720px) { .ac-avatar-grid { grid-template-columns: repeat(4, 1fr); } }
 .ac-identity-meta { color: var(--ac-muted); font-size: 12px; word-break: break-all; }
 
 .ac-textlink {
@@ -702,6 +729,35 @@ a { color: inherit; }
 
 .ac-works { margin-top: 28px; }
 
+/* ---------- AI Key ---------- */
+
+.ac-aikey { margin-top: 28px; }
+
+/* 面板母本默认是蓝色圆角 SaaS 风格，这里拉回纸张主题：纸底、黑线、直角、13px */
+.ac-aikey .aik {
+  --aik-accent: var(--ac-accent);
+  --aik-line: var(--ac-field-line);
+  --aik-text: var(--ac-ink);
+  --aik-muted: var(--ac-muted);
+  --aik-bg: var(--ac-field);
+  --aik-soft: var(--ac-soft);
+  --aik-radius: 0;
+  --aik-danger: var(--ac-danger);
+  max-width: 680px;
+  font-size: 13px;
+}
+
+/* 主按钮跟随页面：黑底反白（深色主题自动反转），不用面板的蓝色 */
+.ac-aikey .aik-btn--primary {
+  background: var(--ac-solid);
+  border-color: var(--ac-solid);
+  color: var(--ac-solid-ink);
+}
+
+.ac-aikey .aik-btn--danger { color: var(--ac-danger); }
+
+.ac-aikey-panel { margin-top: 16px; }
+
 .ac-works-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -712,6 +768,7 @@ a { color: inherit; }
   display: block;
   text-decoration: none;
   color: inherit;
+  text-align: center;
   min-width: 0;
 }
 

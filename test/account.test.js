@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -27,6 +28,7 @@ function setup(options = {}) {
     fetchImpl: options.fetchImpl,
     sms: options.sms,
     captcha: options.captcha,
+    mp: options.mp,
     sendMail: async ({ to, code }) => {
       outbox.push({ to, code });
     },
@@ -37,6 +39,7 @@ function setup(options = {}) {
     app,
     outbox,
     store,
+    clock: () => clock,
     advance(ms) {
       clock += ms;
     }
@@ -688,6 +691,36 @@ test('新账户没设昵称和头像时，me 自动补一套生成的默认形�
   assert.equal(after.data.avatar, me.data.avatar);
 });
 
+test('形象参考：给出 12 个昵称与简笔画头像，候选池落库复用', async () => {
+  const ctx = setup();
+  const login = await emailLogin(ctx, 'random-persona@example.com');
+  await call(ctx.app, login.data.token, 'me');
+
+  const res = await call(ctx.app, login.data.token, 'account.persona.options');
+  assert.equal(res.data.nicknames.length, 12);
+  assert.equal(new Set(res.data.nicknames).size, 12);
+  assert.equal(res.data.avatars.length, 12);
+  res.data.avatars.forEach((url) => {
+    assert.match(url, /^data:image\/svg\+xml;base64,/);
+  });
+
+  // 候选池一次性生成后存在库里，第二次调用不再重新生成
+  const pool = await ctx.store.get('ac_persona_pool', 'default');
+  assert.equal(pool.nicknames.length, 60);
+  assert.equal(pool.avatars.length, 60);
+  await call(ctx.app, login.data.token, 'account.persona.options');
+  const poolAgain = await ctx.store.get('ac_persona_pool', 'default');
+  assert.equal(poolAgain.builtAt, pool.builtAt);
+
+  // 只是参考，点选后才落库
+  const picked = res.data.avatars[0];
+  const saved = await call(ctx.app, login.data.token, 'account.profile', { avatar: picked });
+  assert.equal(saved.data.avatar, picked);
+
+  const me = await call(ctx.app, login.data.token, 'me');
+  assert.equal(me.data.avatar, picked);
+});
+
 test('GitHub 登录：新用户建号，再次登录落到同一 uid', async () => {
   const ctx = oauthSetup();
 
@@ -1113,4 +1146,553 @@ test('图形验证码：答案只存哈希、答错 5 次作废', async () => {
     assert.equal(await captcha.consume(issued.id, wrong), false);
   }
   assert.equal(await captcha.consume(issued.id, answer), false);
+});
+
+/* ---------- 微信小程序登录（云函数代持 openid + 共享密钥签名） ---------- */
+
+const MP_SECRET = 'mp-test-secret';
+
+function mpSign(productId, openid, ts) {
+  return crypto.createHmac('sha256', MP_SECRET).update(`${productId}|${openid}|${ts}`).digest('hex');
+}
+
+test('小程序登录：验签通过后建会话，同一 openid 再登录还是同一个 uid', async () => {
+  const ctx = setup({ mp: { sharedSecret: MP_SECRET } });
+  await ctx.store.set('ac_products', 'wxread', {
+    appId: 'wxread',
+    name: '微信悦读',
+    url: 'https://reader.chesterlee.cn',
+    theme: 'light',
+    status: 'active'
+  });
+
+  const openid = 'o_test_openid_001';
+  const ts = ctx.clock();
+  const first = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid,
+    ts,
+    sign: mpSign('wxread', openid, ts)
+  });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.equal(first.data.isNew, true);
+  assert.ok(first.data.uid.startsWith('u_'));
+  assert.ok(first.data.token);
+
+  const second = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid,
+    ts,
+    sign: mpSign('wxread', openid, ts)
+  });
+  assert.equal(second.ok, true, JSON.stringify(second));
+  assert.equal(second.data.isNew, false);
+  assert.equal(second.data.uid, first.data.uid);
+
+  // 拿 Token 能直接读 me
+  const me = await call(ctx.app, first.data.token, 'me');
+  assert.equal(me.ok, true, JSON.stringify(me));
+  assert.equal(me.data.uid, first.data.uid);
+});
+
+test('小程序登录：签名不对 / 过期 / 作品未登记都拒绝', async () => {
+  const ctx = setup({ mp: { sharedSecret: MP_SECRET } });
+  await ctx.store.set('ac_products', 'wxread', {
+    appId: 'wxread',
+    name: '微信悦读',
+    status: 'active'
+  });
+
+  const openid = 'o_test_openid_002';
+  const ts = ctx.clock();
+
+  const forged = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid,
+    ts,
+    sign: mpSign('wxread', 'o_other', ts)
+  });
+  assert.equal(forged.ok, false);
+  assert.equal(forged.code, 'UNAUTHORIZED');
+
+  const expired = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid,
+    ts: ts - 6 * 60 * 1000,
+    sign: mpSign('wxread', openid, ts - 6 * 60 * 1000)
+  });
+  assert.equal(expired.ok, false);
+  assert.equal(expired.code, 'CODE_EXPIRED');
+
+  const unknownProduct = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'nobody',
+    openid,
+    ts,
+    sign: mpSign('nobody', openid, ts)
+  });
+  assert.equal(unknownProduct.ok, false);
+  assert.equal(unknownProduct.code, 'INVALID_PARAM');
+});
+
+test('小程序登录：没配共享密钥时整个方式关闭', async () => {
+  const ctx = setup();
+  const res = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid: 'o_test_openid_003',
+    ts: ctx.clock(),
+    sign: 'x'
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'MP_DISABLED');
+});
+
+function aiSetup(reply = '连接正常') {
+  const calls = [];
+  const ctx = setup({
+    fetchImpl: async (url, options) => {
+      calls.push({ url, headers: options.headers, body: JSON.parse(options.body) });
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ choices: [{ message: { content: reply } }] })
+      };
+    }
+  });
+  ctx.calls = calls;
+  return ctx;
+}
+
+const AI_KEY = 'sk-1234567890abcdefghijklmn';
+
+test('AI Key：保存后只回掩码，落盘是密文；换设备读出同一份配置', async () => {
+  const ctx = aiSetup();
+  const login = await emailLogin(ctx, 'k1@example.com');
+
+  const saved = await call(ctx.app, login.data.token, 'aikey.save', {
+    base_url: 'https://api.deepseek.com/v1/',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+  assert.equal(saved.ok, true, JSON.stringify(saved));
+  assert.equal(saved.data.hasKey, true);
+  assert.equal(saved.data.baseUrl, 'https://api.deepseek.com/v1');
+  assert.ok(!JSON.stringify(saved.data).includes(AI_KEY));
+  assert.ok(saved.data.masked.includes('……'));
+
+  const row = await ctx.store.get('ac_ai_keys', login.data.uid);
+  assert.ok(row.enc);
+  assert.ok(!JSON.stringify(row).includes(AI_KEY), '落盘不能出现明文 Key');
+
+  // 另一台设备（另一个会话）读到的是同一份
+  await ctx.advance(61 * 1000);
+  const again = await emailLogin(ctx, 'k1@example.com');
+  const got = await call(ctx.app, again.data.token, 'aikey.get');
+  assert.equal(got.ok, true);
+  assert.equal(got.data.hasKey, true);
+  assert.equal(got.data.baseUrl, 'https://api.deepseek.com/v1');
+  assert.equal(got.data.model, 'deepseek-flash');
+  assert.equal(got.data.masked, saved.data.masked);
+
+  const revealed = await call(ctx.app, login.data.token, 'aikey.reveal');
+  assert.equal(revealed.ok, true);
+  assert.equal(revealed.data.key, AI_KEY);
+});
+
+test('AI Key：api_key 留空沿用旧的；清除后 hasKey 变 false', async () => {
+  const ctx = aiSetup();
+  const login = await emailLogin(ctx, 'k2@example.com');
+
+  await call(ctx.app, login.data.token, 'aikey.save', {
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+
+  const reopened = await call(ctx.app, login.data.token, 'aikey.save', {
+    base_url: 'https://api.moonshot.cn/v1',
+    model: 'moonshot-v1-8k',
+    api_key: ''
+  });
+  assert.equal(reopened.ok, true, JSON.stringify(reopened));
+
+  const revealed = await call(ctx.app, login.data.token, 'aikey.reveal');
+  assert.equal(revealed.data.key, AI_KEY);
+
+  const cleared = await call(ctx.app, login.data.token, 'aikey.clear');
+  assert.equal(cleared.ok, true);
+
+  const got = await call(ctx.app, login.data.token, 'aikey.get');
+  assert.equal(got.data.hasKey, false);
+  assert.equal(got.data.baseUrl, '');
+});
+
+test('AI Key：必须登录；只收 https；空 Key 与非法地址直接拒绝', async () => {
+  const ctx = aiSetup();
+
+  const anonymous = await call(ctx.app, '', 'aikey.get');
+  assert.equal(anonymous.ok, false);
+  assert.equal(anonymous.code, 'UNAUTHORIZED');
+
+  const login = await emailLogin(ctx, 'k3@example.com');
+  const payload = { base_url: 'https://api.deepseek.com/v1', model: 'deepseek-flash', api_key: '' };
+
+  const noKey = await call(ctx.app, login.data.token, 'aikey.save', payload);
+  assert.equal(noKey.ok, false);
+  assert.equal(noKey.code, 'INVALID_PARAM');
+
+  const httpUrl = await call(ctx.app, login.data.token, 'aikey.save', {
+    ...payload,
+    base_url: 'http://api.deepseek.com/v1',
+    api_key: AI_KEY
+  });
+  assert.equal(httpUrl.ok, false);
+  assert.equal(httpUrl.code, 'INVALID_PARAM');
+
+  const noModel = await call(ctx.app, login.data.token, 'aikey.save', {
+    ...payload,
+    model: '',
+    api_key: AI_KEY
+  });
+  assert.equal(noModel.ok, false);
+  assert.equal(noModel.code, 'INVALID_PARAM');
+});
+
+test('AI Key：测试连接走服务端转发，DeepSeek 自动关思考模式', async () => {
+  const ctx = aiSetup();
+  const login = await emailLogin(ctx, 'k4@example.com');
+
+  const tested = await call(ctx.app, login.data.token, 'aikey.test', {
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+  assert.equal(tested.ok, true, JSON.stringify(tested));
+  assert.equal(tested.data.reply, '连接正常');
+
+  assert.equal(ctx.calls.length, 1);
+  assert.equal(ctx.calls[0].url, 'https://api.deepseek.com/v1/chat/completions');
+  assert.equal(ctx.calls[0].headers.Authorization, `Bearer ${AI_KEY}`);
+  assert.deepEqual(ctx.calls[0].body.thinking, { type: 'disabled' });
+  assert.equal(ctx.calls[0].body.max_tokens, 24);
+});
+
+test('AI Key：上游报错原样转成可读提示，不泄露 Key', async () => {
+  const ctx = setup({
+    fetchImpl: async () => ({
+      ok: false,
+      status: 401,
+      text: async () => JSON.stringify({ error: { message: 'Authentication Fails' } })
+    })
+  });
+  const login = await emailLogin(ctx, 'k5@example.com');
+
+  const tested = await call(ctx.app, login.data.token, 'aikey.test', {
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+  assert.equal(tested.ok, false);
+  assert.equal(tested.code, 'AI_UPSTREAM');
+  assert.ok(tested.message.includes('Authentication Fails'));
+  assert.ok(!JSON.stringify(tested).includes(AI_KEY));
+});
+
+test('AI Key：按 uid 隔离；注销账户时一并销毁', async () => {
+  const ctx = aiSetup();
+  const a = await emailLogin(ctx, 'k6@example.com');
+  const b = await emailLogin(ctx, 'k7@example.com');
+
+  await call(ctx.app, a.data.token, 'aikey.save', {
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+
+  const otherUser = await call(ctx.app, b.data.token, 'aikey.get');
+  assert.equal(otherUser.data.hasKey, false);
+
+  await call(ctx.app, a.data.token, 'account.delete', { confirm: '注销' });
+  assert.equal(await ctx.store.get('ac_ai_keys', a.data.uid), null);
+});
+
+test('AI 网关：用托管的 Key 调上游，模型与地址不接受请求指定', async () => {
+  const ctx = aiSetup('今天跑得不错，注意补碳水。');
+  const login = await emailLogin(ctx, 'c1@example.com');
+
+  await call(ctx.app, login.data.token, 'aikey.save', {
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+
+  const res = await call(ctx.app, login.data.token, 'aikey.chat', {
+    // 故意传别的模型名，应被忽略（只认托管的那份）
+    model: 'gpt-4o',
+    feature: 'review',
+    messages: [
+      { role: 'system', content: '你是跑步教练' },
+      { role: 'user', content: '帮我看看本周训练' }
+    ]
+  });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.data.text, '今天跑得不错，注意补碳水。');
+  assert.equal(res.data.model, 'deepseek-flash');
+
+  assert.equal(ctx.calls.length, 1);
+  assert.equal(ctx.calls[0].url, 'https://api.deepseek.com/v1/chat/completions');
+  assert.equal(ctx.calls[0].headers.Authorization, `Bearer ${AI_KEY}`);
+  assert.equal(ctx.calls[0].body.model, 'deepseek-flash');
+  assert.deepEqual(ctx.calls[0].body.thinking, { type: 'disabled' });
+
+  // 审计只留用量，不留对话正文与 Key
+  const logs = await ctx.store.query('ac_audit_logs', { actorUid: login.data.uid }, 200);
+  const chatLog = logs.find((row) => row.action === 'aikey.chat');
+  assert.ok(chatLog, '应记录一条 aikey.chat 审计');
+  const dumped = JSON.stringify(chatLog);
+  assert.ok(!dumped.includes('帮我看看本周训练'), '审计不能出现对话正文');
+  assert.ok(!dumped.includes(AI_KEY), '审计不能出现 Key');
+  assert.equal(chatLog.detail.model, 'deepseek-flash');
+});
+
+test('AI 网关：没填 Key、对话为空或角色非法都直接拒', async () => {
+  const ctx = aiSetup();
+  const login = await emailLogin(ctx, 'c2@example.com');
+
+  const noKey = await call(ctx.app, login.data.token, 'aikey.chat', {
+    messages: [{ role: 'user', content: '你好' }]
+  });
+  assert.equal(noKey.ok, false);
+  assert.equal(noKey.code, 'AI_NO_KEY');
+
+  await call(ctx.app, login.data.token, 'aikey.save', {
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+
+  const empty = await call(ctx.app, login.data.token, 'aikey.chat', { messages: [] });
+  assert.equal(empty.ok, false);
+  assert.equal(empty.code, 'INVALID_PARAM');
+
+  const badRole = await call(ctx.app, login.data.token, 'aikey.chat', {
+    messages: [{ role: 'root', content: '你好' }]
+  });
+  assert.equal(badRole.ok, false);
+  assert.equal(badRole.code, 'INVALID_PARAM');
+
+  const tooLong = await call(ctx.app, login.data.token, 'aikey.chat', {
+    messages: [{ role: 'user', content: 'x'.repeat(30001) }]
+  });
+  assert.equal(tooLong.ok, false);
+  assert.equal(tooLong.code, 'INVALID_PARAM');
+
+  assert.equal(ctx.calls.length, 0, '校验失败不应打到上游');
+});
+
+test('AI 网关：上游报错转成可读提示，不泄露 Key', async () => {
+  const ctx = setup({
+    fetchImpl: async () => ({
+      ok: false,
+      status: 402,
+      text: async () => JSON.stringify({ error: { message: 'Insufficient Balance' } })
+    })
+  });
+  const login = await emailLogin(ctx, 'c3@example.com');
+  await call(ctx.app, login.data.token, 'aikey.save', {
+    base_url: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    api_key: AI_KEY
+  });
+
+  const res = await call(ctx.app, login.data.token, 'aikey.chat', {
+    messages: [{ role: 'user', content: '你好' }]
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'AI_UPSTREAM');
+  assert.ok(res.message.includes('Insufficient Balance'));
+  assert.ok(!JSON.stringify(res).includes(AI_KEY));
+});
+
+/* ---------- 小程序绑定已有账户（6 位登录码） ---------- */
+
+test('小程序绑定已有账户：用网页端 6 位码把微信挂到老账户', async () => {
+  const ctx = setup({ mp: { sharedSecret: MP_SECRET } });
+  await ctx.store.set('ac_products', 'wxread', {
+    appId: 'wxread',
+    name: '微信悦读',
+    url: 'https://reader.chesterlee.cn',
+    theme: 'light',
+    status: 'active'
+  });
+
+  const login = await emailLogin(ctx, 'bind@example.com');
+  assert.equal(login.ok, true, JSON.stringify(login));
+
+  const started = await call(ctx.app, login.data.token, 'auth.code.start');
+  assert.equal(started.ok, true, JSON.stringify(started));
+
+  const openid = 'o_test_bind_001';
+  const ts = ctx.clock();
+  const bound = await call(ctx.app, '', 'auth.mp.bind', {
+    productId: 'wxread',
+    openid,
+    ts,
+    sign: mpSign('wxread', openid, ts),
+    code: started.data.code
+  });
+  assert.equal(bound.ok, true, JSON.stringify(bound));
+  assert.equal(bound.data.uid, login.data.uid);
+  assert.equal(bound.data.bound, true);
+  assert.equal(bound.data.isNew, false);
+  assert.ok(bound.data.token);
+
+  // 绑定后一键登录直接进同一个 uid
+  const ts2 = ctx.clock();
+  const again = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid,
+    ts: ts2,
+    sign: mpSign('wxread', openid, ts2)
+  });
+  assert.equal(again.ok, true, JSON.stringify(again));
+  assert.equal(again.data.uid, login.data.uid);
+  assert.equal(again.data.isNew, false);
+
+  // 码用掉后不能再用
+  const ts3 = ctx.clock();
+  const reused = await call(ctx.app, '', 'auth.mp.bind', {
+    productId: 'wxread',
+    openid: 'o_test_bind_009',
+    ts: ts3,
+    sign: mpSign('wxread', 'o_test_bind_009', ts3),
+    code: started.data.code
+  });
+  assert.equal(reused.ok, false);
+  assert.equal(reused.code, 'CODE_INVALID');
+});
+
+test('小程序绑定：微信属于别的账户 → KEY_TAKEN；码错 / 签名不对也拒绝', async () => {
+  const ctx = setup({ mp: { sharedSecret: MP_SECRET } });
+  await ctx.store.set('ac_products', 'wxread', {
+    appId: 'wxread',
+    name: '微信悦读',
+    url: 'https://reader.chesterlee.cn',
+    theme: 'light',
+    status: 'active'
+  });
+
+  const openid = 'o_test_bind_002';
+
+  // A 账户（老账户）先占住这把微信
+  const owner = await emailLogin(ctx, 'owner@example.com');
+  const startedOwner = await call(ctx.app, owner.data.token, 'auth.code.start');
+  const ts0 = ctx.clock();
+  const okBind = await call(ctx.app, '', 'auth.mp.bind', {
+    productId: 'wxread',
+    openid,
+    ts: ts0,
+    sign: mpSign('wxread', openid, ts0),
+    code: startedOwner.data.code
+  });
+  assert.equal(okBind.ok, true, JSON.stringify(okBind));
+  assert.equal(okBind.data.uid, owner.data.uid);
+
+  // B 账户想用同一个微信绑到自己名下
+  ctx.advance(61 * 1000);
+  const other = await emailLogin(ctx, 'other@example.com');
+  const startedOther = await call(ctx.app, other.data.token, 'auth.code.start');
+  const ts1 = ctx.clock();
+  const taken = await call(ctx.app, '', 'auth.mp.bind', {
+    productId: 'wxread',
+    openid,
+    ts: ts1,
+    sign: mpSign('wxread', openid, ts1),
+    code: startedOther.data.code
+  });
+  assert.equal(taken.ok, false, JSON.stringify(taken));
+  assert.equal(taken.code, 'KEY_TAKEN');
+
+  // 码错
+  const ts2 = ctx.clock();
+  const wrongCode = await call(ctx.app, '', 'auth.mp.bind', {
+    productId: 'wxread',
+    openid: 'o_test_bind_003',
+    ts: ts2,
+    sign: mpSign('wxread', 'o_test_bind_003', ts2),
+    code: '000000'
+  });
+  assert.equal(wrongCode.ok, false);
+  assert.equal(wrongCode.code, 'CODE_INVALID');
+
+  // 签名不对
+  const badSign = await call(ctx.app, '', 'auth.mp.bind', {
+    productId: 'wxread',
+    openid: 'o_test_bind_004',
+    ts: ts2,
+    sign: 'deadbeef',
+    code: startedOther.data.code
+  });
+  assert.equal(badSign.ok, false);
+  assert.equal(badSign.code, 'UNAUTHORIZED');
+});
+
+test('小程序绑定：先点过一键登录的空壳账户会被接管，不报 KEY_TAKEN', async () => {
+  const ctx = setup({ mp: { sharedSecret: MP_SECRET } });
+  await ctx.store.set('ac_products', 'wxread', {
+    appId: 'wxread',
+    name: '微信悦读',
+    url: 'https://reader.chesterlee.cn',
+    theme: 'light',
+    status: 'active'
+  });
+
+  const openid = 'o_test_shell_001';
+
+  // 1) 用户先误点「微信一键登录」→ 系统建了一个空壳账户
+  let ts = ctx.clock();
+  const shell = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid,
+    ts,
+    sign: mpSign('wxread', openid, ts)
+  });
+  assert.equal(shell.ok, true, JSON.stringify(shell));
+  assert.equal(shell.data.isNew, true);
+  const shellUid = shell.data.uid;
+
+  // 2) 网页端老账户生成 6 位码
+  const old = await emailLogin(ctx, 'veteran@example.com');
+  const started = await call(ctx.app, old.data.token, 'auth.code.start');
+
+  // 3) 绑定 → 空壳账户被接管，钥匙转到老 uid
+  ts = ctx.clock();
+  const bound = await call(ctx.app, '', 'auth.mp.bind', {
+    productId: 'wxread',
+    openid,
+    ts,
+    sign: mpSign('wxread', openid, ts),
+    code: started.data.code
+  });
+  assert.equal(bound.ok, true, JSON.stringify(bound));
+  assert.equal(bound.data.uid, old.data.uid);
+  assert.equal(bound.data.tookOver, true);
+  assert.equal(bound.data.bound, true);
+
+  // 4) 空壳账户被标记注销，且它原来的会话已撤销
+  const shellUser = await ctx.store.get('ac_users', shellUid);
+  assert.equal(shellUser.status, 'deleted');
+  const shellMe = await call(ctx.app, shell.data.token, 'me');
+  assert.equal(shellMe.ok, false);
+
+  // 5) 之后再点一键登录，直接进老账户
+  ts = ctx.clock();
+  const again = await call(ctx.app, '', 'auth.mp.login', {
+    productId: 'wxread',
+    openid,
+    ts,
+    sign: mpSign('wxread', openid, ts)
+  });
+  assert.equal(again.ok, true, JSON.stringify(again));
+  assert.equal(again.data.uid, old.data.uid);
+  assert.equal(again.data.isNew, false);
 });

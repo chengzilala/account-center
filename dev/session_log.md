@@ -185,3 +185,15 @@
 - **验证**：`node --test test/account.test.js` → 34 项全过（新增：未配置拒绝、手机号首登建号与二次同 uid、绑定 / `PHONE_TAKEN` / 解绑、错码与图形码拦截、图形码哈希与 5 次作废）；`account.html` / `login.html` 内联脚本 `new Function` 语法检查通过；`lib/sms.js` 用假 AK 调通 SDK（回 `InvalidAccessKeyId.NotFound`，链路正常）。
 - **待办**：① 在阿里云开通「短信认证」并拿到签名名称 / 模板 CODE，把 `ALIYUN_SMS_*` 四项写进 `/etc/account-center.env` 后重启（步骤见 Running §5.6）；② 线上验收发码、登录、绑定、解绑；③ 本轮未 `git commit`、未部署。
 - **风险/注意事项**：短信按条计费，被刷是唯一实质成本风险（限流与图形码已内置，必要时再收紧）；`ALIYUN_SMS_*` 只进 systemd EnvironmentFile，不入库不写日志；图形验证码答案与短信码都不回传前端；本地调试默认走控制台短信，验证码只在终端可见。
+
+---
+
+## 2026-11-10 会话条目：Microsoft 登录上线（免费 Entra 租户，跳过 Azure 绑卡）
+
+- **目标**：接通 Microsoft 账户登录/绑定——原计划走 Azure 免费账户，但银联借记卡无法通过国际在线支付 $1 预授权（"无法验证你提供的信用卡信息"），改为**免费 Microsoft Entra 租户**建应用，拿到 Client ID / Secret 后写服务器 env 并线上实测。
+- **已做**：① 用本机真实 Chrome（CDP 9445）+ Playwright 脚本在 <https://entra.microsoft.com> 创建免费目录并注册应用 `account-center`（账户类型「任何 Entra ID 租户 + 个人 Microsoft 帐户」，重定向 URI `https://account.chesterlee.cn/oauth/microsoft/callback`）；② 新建客户端密码 `account-center-prod`（730 天，截止 2028-11-09）；③ 用 `.autoshot/entra-read-secret.js` 从页面 DOM 读回完整秘密值，写入本机 `~/.config/account-center/microsoft.env`（600），并 `sudo tee -a` 追加到服务器 `/etc/account-center.env`（600），重启 `account-center`；④ 线上确认 `auth.oauth.providers` 返回 github / gitee / microsoft 三家；⑤ 实测授权链路：`auth.oauth.start` 生成的 `login.microsoftonline.com/common/oauth2/v2.0/authorize` 返回 200，走完同意页后回调成功，账户页显示已绑定 `Microsoft · 17693433974@163.com`。
+- **关键结论/决定**：不需要 Azure 订阅、不需要绑卡——个人 Microsoft 账号登录 Entra 管理中心即可免费建租户并注册应用，`User.Read`（Delegated）为新注册默认自带、无需管理员同意；`MICROSOFT_TENANT=common` 同时覆盖组织账号与个人 MSA；首次微软登录按「第三方登录独立建号」规则新建了 uid `u_ea3d5492106e2f97`（与邮箱账户不自动合并）。
+- **产出物（文件/链接）**：`usage/Running.md`（§5 状态行 + §5.3 改写为免绑卡路径）、`.autoshot/entra-read-secret.js`（新建）、`.autoshot/entra-perms.js`（新建）、`.autoshot/entra-reg4.js`（注册应用）。
+- **验证**：`curl /accountCenter {"action":"auth.oauth.providers"}` 含 microsoft；`systemctl is-active account-center` = active、`/healthz` = `{"ok":true}`；store 内 `oauth:microsoft:57d45699aa2f5dc9` → uid 绑定正确；浏览器实测登录后账户页显示 Microsoft 登录方式。
+- **待办**：① 若希望微软账号与既有邮箱账户合并，需先登录既有账户在账户页点「添加登录方式」再绑；② 秘密 730 天后到期（2028-11-09），到期前轮换；③ 本轮未 `git commit`。
+- **风险/注意事项**：`MICROSOFT_CLIENT_SECRET` 只存两处（本机 `~/.config/account-center/microsoft.env` 与服务器 `/etc/account-center.env`，均 600），不入库不写日志；Entra 页面关闭后秘密值不再显示，丢失只能重建；免费租户无 Azure 资源但不影响 OAuth。

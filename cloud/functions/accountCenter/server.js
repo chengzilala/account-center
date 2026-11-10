@@ -47,7 +47,11 @@ const app = createApp({
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean),
-  oauth: oauthLib.configFromEnv(process.env)
+  oauth: oauthLib.configFromEnv(process.env),
+  // 小程序登录：与 wereadProxy 云函数共享的签名密钥；没配就不开放该方式
+  mp: { sharedSecret: process.env.MP_SHARED_SECRET || '' },
+  // AI Key 加密密钥：不填则由 TOKEN_PEPPER 派生；填了以后不可再改（改了已托管的 Key 全部失效）
+  aiKey: { secret: process.env.AI_KEY_SECRET || '' }
 });
 
 const OAUTH_CALLBACK = /^\/oauth\/([a-z]+)\/callback$/;

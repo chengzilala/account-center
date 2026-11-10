@@ -1,7 +1,8 @@
 # account-center — 统一账户中心
 
-> **状态**：后端核心已本地跑通（35 项测试通过，含跨域票据、第三方登录与手机号验证码）；**前端已按参考图改版**（纸张底色 + 黑色细线 + 大标题的编辑风）：登录页展示手机号验证码 / 邮箱验证码 / 手机扫码登录 / GitHub / Gitee / Microsoft / 账户码 / 6 位码（**没配 Client ID 的平台、没配短信的服务自动隐藏**），我的账户为「账户状态 / 登录方式（含绑定 / 解绑）/ 我的装置 / 隐私与安全」，并新增用户协议与隐私政策页；**账户凭证可保存到相册，并带「扫码自动填邮箱」的二维码**；**新设备一键登录（手机扫码确认）与昵称 / 头像跨作品同步已上线**；**没自定义昵称 / 头像的账户由系统生成默认形象（2026-10-30）**；**作品侧 SDK（`sdk/ps-auth.js`）与跨域登录票据已落地**；微信 / Google 仍为 P1；**线上已上线（`https://account.chesterlee.cn`，2026-10-28）**。
+> **状态**：后端核心已本地跑通（45 项测试通过，含跨域票据、第三方登录与手机号验证码）；**前端已按参考图改版**（纸张底色 + 黑色细线 + 大标题的编辑风）：登录页展示手机号验证码 / 邮箱验证码 / 手机扫码登录 / GitHub / Gitee / Microsoft / 账户码 / 6 位码（**没配 Client ID 的平台、没配短信的服务自动隐藏**），我的账户为「账户状态 / 登录方式（含绑定 / 解绑）/ 我的装置 / 隐私与安全」，并新增用户协议与隐私政策页；**账户凭证可保存到相册，并带「扫码自动填邮箱」的二维码**；**新设备一键登录（手机扫码确认）与昵称 / 头像跨作品同步已上线**；**没自定义昵称 / 头像的账户由系统生成默认形象（2026-10-30）**；**作品侧 SDK（`sdk/ps-auth.js`）与跨域登录票据已落地**；微信 / Google 仍为 P1；**用户自填 AI Key 托管接口（`aikey.*`）与 `PSAuth.aiKeyCall` 已上线（2026-11-04）**。**线上已上线（`https://account.chesterlee.cn`，2026-10-28）**。
 > **部署**：腾讯云轻量 `43.136.92.125`（`/srv/chesterlee/account`，`account-center.service` + Caddy + HTTPS），更新命令见 [Running.md](usage/Running.md) §4。
+> **域名 / 备案 / 上线**：统一记在 [部署上线备案/README.md](../部署上线备案/README.md)（唯一台账），本文不重复；5 个页面页脚已挂 `陇ICP备2026009894号-2` + `甘公网安备62052302000062号`（含公安部官方图标，2026-10-28 通过）。
 > **一句话**：全站统一的身份层——一个 uid 管所有作品，负责登录、会话、作品开通状态。
 
 ## 这是什么
@@ -10,7 +11,7 @@
 
 - **账户中心**：登录页（手机号验证码 / 邮箱验证码 / GitHub / Gitee / Microsoft / 账户码 / 6 位码）、我的账户（登录方式总览：已连接 / 未连接，可连接与解绑）、管理后台
 - **作品侧**只认 `uid` 与轻量 SDK `sdk/ps-auth.js`（`getUser / requireLogin / logout`）
-- **第三方 Key 与业务数据不进这里**：微信读书 Key、高驰 Token、跑步 / 阅读数据继续留在各作品
+- **第三方 Key 与业务数据不进这里**：微信读书 Key、高驰 Token、跑步 / 阅读数据继续留在各作品；**唯一例外是用户自填的 AI Key**（`aikey.*`，按 uid 加密托管，见 §AI Key 托管）
 - **第三方登录只做身份**：GitHub / Gitee / Microsoft 只用于识别「你是谁」，不自动合并邮箱账户，绑定由用户在账户页主动发起
 - **手机号登录**：走阿里云「短信认证」（系统预置签名 + 模板，个人实名可用），发送前必须先过图形验证码；手机号同样只做身份，不自动合并邮箱账户
 - **登录页配色按作品走**：在账户中心登记一次（`register-product.js` 的 `[light|dark] [#rrggbb]`），深色作品的登录页自动同色，作品代码不用改
@@ -26,7 +27,7 @@ account-center/
 │   ├── account.html           # 我的账户：账户状态（含账户凭证）/ 登录方式（总览 + 绑定 / 解绑）/ 我的装置 / 跨设备登录 / 隐私与安全
 │   ├── terms.html             # 用户协议
 │   ├── privacy.html           # 隐私政策（含账户安全说明）
-│   └── assets/                # ac.css（ac- 前缀样式）+ ac.js（请求封装）+ theme.js（换肤引导）+ qrcode.js（零依赖二维码）
+│   └── assets/                # ac.css（ac- 前缀样式）+ ac.js（请求封装）+ theme.js（换肤引导）+ qrcode.js（零依赖二维码）+ ai-key/v1/（AI Key 面板母本）
 ├── cloud/functions/
 │   └── accountCenter/         # 账户中心服务（按 action 路由）
 │       ├── app.js             # 核心逻辑（与部署平台无关）
@@ -44,6 +45,37 @@ account-center/
 ├── test/  usage/  screenshots/  inbox/
 └── .trae/{rules,skills}       # 项目规则与技能副本（由母本同步，不入库）
 ```
+
+## AI Key 托管（2026-11-04）
+
+用户自己填的 AI Key 统一放在这里，按 `uid` 加密存 `ac_ai_keys`（AES-256-GCM），所有作品共用一份。
+
+- 接口：`aikey.get` / `aikey.save` / `aikey.clear` / `aikey.reveal` / `aikey.test` / `aikey.chat`（均需登录），口径见 [接入契约.md](plan/接入契约.md) §4.28
+- **面板母本：`web/assets/ai-key/v1/`**（`providers.js` / `key-store.js` / `key-panel.js` / `key-panel.css` / `ai-client.js`）。2026-11-10 起从 `AI Key 集成/` 迁入，**以后只在这里开发**；账户页 `account.html` 同源引用 `assets/ai-key/v1/`，其他作品引用 `https://account.chesterlee.cn/assets/ai-key/v1/`，部署账户中心即全站生效（不再有 publish 步骤）
+- 接入（作品侧只要这四行 + 一个挂载）：
+
+  ```html
+  <link rel="stylesheet" href="https://account.chesterlee.cn/assets/ai-key/v1/key-panel.css">
+  <script src="https://account.chesterlee.cn/assets/ai-key/v1/providers.js"></script>
+  <script src="https://account.chesterlee.cn/assets/ai-key/v1/key-store.js"></script>
+  <script src="https://account.chesterlee.cn/assets/ai-key/v1/key-panel.js"></script>
+  ```
+
+  ```js
+  PSAuth.init({ apiBase: 'https://account.chesterlee.cn', productId: '你的作品id' });
+  AIKeyPanel.mount(document.getElementById('aiKeySlot'), {
+    store: AIKeyStore.remote({
+      call: PSAuth.aiKeyCall,
+      actions: { get: 'aikey.get', save: 'aikey.save', clear: 'aikey.clear', test: 'aikey.test', reveal: 'aikey.reveal' }
+    }),
+    title: 'AI Key',
+    note: '自己填、加密托管，随时可清除'
+  });
+  ```
+
+- 厂商清单只在 `providers.js` 维护（加一家加一项，然后部署）；`AIKeyClient` 的错误文案表只在 `ai-client.js` 维护
+- 加密密钥：`AI_KEY_SECRET`（不配则由 `TOKEN_PEPPER` 派生）；**两者都不能更换，否则已托管的 Key 全部失效**
+- 注销账户时一并删除；审计只记 host / model，不记 Key，也不进「我的足迹」
 
 ## 怎么跑
 

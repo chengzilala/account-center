@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>我的账户 · 账户中心</title>
-  <link rel="stylesheet" href="assets/ac.css?v=20261030b">
+  <link rel="stylesheet" href="assets/ac.css?v=20261104c">
+  <link rel="stylesheet" href="assets/ai-key/v1/key-panel.css?v=20261110">
   <script src="assets/theme.js"></script>
 </head>
 <body class="ac-page">
@@ -41,6 +42,7 @@
             <input class="ac-input" id="nickname-input" type="text" maxlength="20" autocomplete="off" placeholder="给自己起个昵称">
             <button type="button" class="ac-btn" id="nickname-save">保存</button>
             <button type="button" class="ac-btn ac-btn-secondary" id="nickname-cancel">取消</button>
+            <div class="ac-suggests is-hidden" id="name-suggests"></div>
           </div>
           <div class="ac-identity-meta" id="subtitle">—</div>
         </div>
@@ -67,7 +69,7 @@
           <div class="ac-keylist" id="keys"></div>
           <div class="ac-key-reveal is-hidden" id="code-reveal">
             <p class="ac-key-reveal-label">你的账户码（只显示这一次，请保存好；它和密码一样，别转发）</p>
-            <code class="ac-key-reveal-code" id="code-value"></code>
+            <code class="ac-key-reveal-code" id="account-code-value"></code>
             <div class="ac-key-reveal-acts">
               <button type="button" class="ac-textlink" id="code-copy">复制</button>
               <button type="button" class="ac-textlink ac-textlink--muted" id="code-close">我已保存</button>
@@ -150,11 +152,30 @@
         </section>
       </div>
 
+      <section class="ac-card ac-aikey" id="ai-key">
+        <h2 class="ac-section-title">AI Key</h2>
+        <p class="ac-section-sub">一个账户一份，所有作品通用。自己填、加密托管，随时可清除。</p>
+
+        <div class="ac-key">
+          <span class="ac-chip" aria-hidden="true">AI</span>
+          <div class="ac-key-main">
+            <div class="ac-key-name" id="ai-key-name">正在读取…</div>
+            <div class="ac-key-sub" id="ai-key-status">—</div>
+          </div>
+          <div class="ac-key-side">
+            <button type="button" class="ac-textlink" id="ai-key-toggle"
+                    aria-expanded="false" aria-controls="aiKeySlot">管理</button>
+          </div>
+        </div>
+
+        <div class="ac-aikey-panel is-hidden" id="aiKeySlot"></div>
+      </section>
+
       <p class="ac-msg" id="msg" role="status"></p>
 
       <footer class="ac-foot">
         <span>各作品的跑步 / 阅读等业务数据不在账户中心，注销这里不会删除它们。</span>
-        <span><a href="mailto:chester@chesterlee.cn">反馈问题或建议 →</a> · © 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a></span>
+        <span><a href="mailto:chester@chesterlee.cn">反馈问题或建议 →</a> · © 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a> · <a href="https://beian.mps.gov.cn/#/query/webSearch?code=62052302000062" target="_blank" rel="noopener"><img src="/assets/img/beian-police.png" alt="公安备案" width="16" height="16" style="vertical-align:-3px;margin-right:4px;border:0">甘公网安备62052302000062号</a></span>
       </footer>
     </main>
   </div>
@@ -175,8 +196,26 @@
     </div>
   </div>
 
+  <div class="ac-modal is-hidden" id="avatar-picker" role="dialog" aria-modal="true" aria-label="选择头像">
+    <div class="ac-modal-box">
+      <div class="ac-modal-head">
+        <strong>选一个头像</strong>
+        <button type="button" class="ac-modal-close" id="avatar-picker-close" aria-label="关闭">×</button>
+      </div>
+      <p class="ac-hint">系统画的简笔画头像，点一下就换上；也可以上传自己的图片。</p>
+      <div class="ac-avatar-grid" id="avatar-options"></div>
+      <div class="ac-actions">
+        <button type="button" class="ac-btn ac-btn-secondary" id="avatar-upload">上传自己的图片</button>
+      </div>
+    </div>
+  </div>
+
   <script src="assets/ac.js"></script>
   <script src="assets/qrcode.js"></script>
+  <!-- AI Key 面板（母本：web/assets/ai-key/v1/，同源引用，部署即生效） -->
+  <script src="assets/ai-key/v1/providers.js?v=20261110"></script>
+  <script src="assets/ai-key/v1/key-store.js?v=20261110"></script>
+  <script src="assets/ai-key/v1/key-panel.js?v=20261110"></script>
   <script>
     (function () {
       'use strict';
@@ -302,12 +341,77 @@
 
       var avatarBtn = document.getElementById('avatar-initial');
       var avatarFile = document.getElementById('avatar-file');
+      var avatarPicker = document.getElementById('avatar-picker');
+      var avatarOptionsBox = document.getElementById('avatar-options');
+      var personaOptions = null;
 
-      avatarBtn.addEventListener('click', function () {
-        avatarFile.click();
+      /* 参考选项每次打开页面只取一次，避免反复生成 */
+      async function getPersonaOptions() {
+        if (personaOptions) return personaOptions;
+        personaOptions = await AC.call('account.persona.options');
+        return personaOptions;
+      }
+
+      function closeAvatarPicker() {
+        avatarPicker.classList.add('is-hidden');
+      }
+
+      async function openAvatarPicker() {
+        avatarPicker.classList.remove('is-hidden');
+        avatarOptionsBox.textContent = '';
+        var loading = document.createElement('p');
+        loading.className = 'ac-hint';
+        loading.textContent = '正在画…';
+        avatarOptionsBox.appendChild(loading);
+
+        try {
+          var data = await getPersonaOptions();
+          renderAvatarOptions(data.avatars || []);
+        } catch (err) {
+          avatarOptionsBox.textContent = '';
+          fail(err);
+        }
+      }
+
+      function renderAvatarOptions(list) {
+        avatarOptionsBox.textContent = '';
+        list.forEach(function (url) {
+          var item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'ac-avatar-option';
+          item.style.backgroundImage = 'url("' + url + '")';
+          item.setAttribute('aria-label', '使用这个头像');
+          item.addEventListener('click', function () {
+            saveAvatarOption(url, item);
+          });
+          avatarOptionsBox.appendChild(item);
+        });
+      }
+
+      async function saveAvatarOption(url, btn) {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        try {
+          var saved = await AC.call('account.profile', { avatar: url });
+          avatarUrl = saved.avatar || '';
+          paintAvatar(avatarUrl);
+          closeAvatarPicker();
+          showMsg('头像已更新，所有作品都会显示这张', 'ok');
+        } catch (err) {
+          fail(err);
+        }
+        btn.disabled = false;
+      }
+
+      avatarBtn.addEventListener('click', openAvatarPicker);
+      document.getElementById('avatar-edit').addEventListener('click', openAvatarPicker);
+
+      document.getElementById('avatar-picker-close').addEventListener('click', closeAvatarPicker);
+      avatarPicker.addEventListener('click', function (event) {
+        if (event.target === avatarPicker) closeAvatarPicker();
       });
-
-      document.getElementById('avatar-edit').addEventListener('click', function () {
+      document.getElementById('avatar-upload').addEventListener('click', function () {
+        closeAvatarPicker();
         avatarFile.click();
       });
 
@@ -355,6 +459,18 @@
         side.className = 'ac-key-side';
 
         if (opts.bound) {
+          if (opts.onRegenerate) {
+            var regenBtn = document.createElement('button');
+            regenBtn.type = 'button';
+            regenBtn.className = 'ac-textlink ac-textlink--muted';
+            regenBtn.textContent = '重新生成';
+            regenBtn.title = '忘记原账户码时，可再生成一个新的（旧的立即失效）';
+            regenBtn.addEventListener('click', function (event) {
+              opts.onRegenerate(event.currentTarget);
+            });
+            side.appendChild(regenBtn);
+          }
+
           if (opts.onUnbind) {
             var unbindBtn = document.createElement('button');
             unbindBtn.type = 'button';
@@ -428,7 +544,7 @@
 
       /* 账户码：服务端生成，完整值只展示这一次 */
       var codeReveal = document.getElementById('code-reveal');
-      var codeValue = document.getElementById('code-value');
+      var codeValue = document.getElementById('account-code-value');
 
       async function generateAccountCode(entry, btn) {
         var sure = window.confirm('生成后账户码只显示一次，请当场存好；之前生成过的账户码会立即失效。继续？');
@@ -436,9 +552,13 @@
         btn.disabled = true;
         try {
           var data = await AC.call('account.code.generate');
-          codeValue.textContent = data.accountCode || '';
+          codeValue.textContent = (data && data.accountCode) || '';
           codeReveal.classList.remove('is-hidden');
-          showMsg('账户码已生成，请立即保存', 'ok');
+          if (codeReveal.scrollIntoView) {
+            codeReveal.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }
+          showMsg('账户码已生成，请立刻复制保存（只显示这一次）', 'ok');
+          btn.disabled = false;
           await loadMe();
         } catch (err) {
           btn.disabled = false;
@@ -692,6 +812,9 @@
           if (entry.bound) {
             opts.canUnbind = canUnbind;
             opts.onUnbind = function (btn) { unbindKey(entry, btn); };
+            if (entry.kind === 'device') {
+              opts.onRegenerate = function (btn) { generateAccountCode(entry, btn); };
+            }
           } else if (entry.kind === 'oauth') {
             opts.onBind = function (btn) { bindProvider(entry, btn); };
           } else if (entry.kind === 'phone') {
@@ -707,6 +830,43 @@
       var nicknameEditBtn = document.getElementById('nickname-edit');
       var nicknameBox = document.getElementById('nickname-edit-box');
       var nicknameInput = document.getElementById('nickname-input');
+      var nameSuggestsBox = document.getElementById('name-suggests');
+
+      function renderNameSuggest(list) {
+        nameSuggestsBox.textContent = '';
+        if (!list || !list.length) {
+          nameSuggestsBox.classList.add('is-hidden');
+          return;
+        }
+
+        var label = document.createElement('span');
+        label.className = 'ac-suggests-label';
+        label.textContent = '参考';
+        nameSuggestsBox.appendChild(label);
+
+        list.forEach(function (name) {
+          var chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'ac-suggest-chip';
+          chip.textContent = name;
+          chip.addEventListener('click', function () {
+            nicknameInput.value = name;
+            nicknameInput.focus();
+          });
+          nameSuggestsBox.appendChild(chip);
+        });
+
+        nameSuggestsBox.classList.remove('is-hidden');
+      }
+
+      async function loadNameSuggest() {
+        try {
+          var data = await getPersonaOptions();
+          renderNameSuggest(data.nicknames || []);
+        } catch (err) {
+          // 参考拿不到就不显示，不影响自己输入
+        }
+      }
 
       function closeNicknameEdit() {
         nicknameBox.classList.add('is-hidden');
@@ -718,6 +878,7 @@
         nicknameBox.classList.remove('is-hidden');
         nicknameEditBtn.classList.add('is-hidden');
         nicknameInput.focus();
+        loadNameSuggest();
       });
 
       document.getElementById('nickname-cancel').addEventListener('click', closeNicknameEdit);
@@ -1295,6 +1456,84 @@
 
       loadMe();
       loadProducts();
+
+      /* AI Key：低频配置，账户页只留一行摘要；点「管理」或带 #ai-key 直达时才展开 */
+      var aiKeySection = document.getElementById('ai-key');
+      var aiKeyBox = document.getElementById('aiKeySlot');
+      var aiKeyToggle = document.getElementById('ai-key-toggle');
+      var aiKeyName = document.getElementById('ai-key-name');
+      var aiKeyStatus = document.getElementById('ai-key-status');
+      var aiKeyMounted = false;
+
+      function paintAiKey(info) {
+        if (!info) {
+          aiKeyName.textContent = 'AI Key';
+          aiKeyStatus.textContent = '点「管理」查看或填写。';
+          return;
+        }
+        var providers = window.AIKeyProviders;
+        var provider = info.hasKey && info.baseUrl && providers
+          ? providers.byBaseUrl(info.baseUrl)
+          : null;
+        aiKeyName.textContent = info.hasKey
+          ? (provider ? provider.name : '自定义端点')
+          : '还没有配置';
+        var parts = [];
+        if (info.hasKey && info.masked) parts.push(info.masked);
+        if (info.hasKey && info.model) parts.push(info.model);
+        aiKeyStatus.textContent = parts.length
+          ? parts.join(' · ')
+          : '选一个平台，粘贴自己的 Key 即可。';
+      }
+
+      function refreshAiKey() {
+        return AC.call('aikey.get').then(paintAiKey).catch(function (err) {
+          paintAiKey(null);
+          if (AC.isLoggedOut(err)) AC.goLogin();
+        });
+      }
+
+      function mountAiKey() {
+        if (aiKeyMounted) return;
+        aiKeyMounted = true;
+        AIKeyPanel.mount(aiKeyBox, {
+          store: AIKeyStore.remote({
+            call: function (action, payload) {
+              return AC.call(action, payload).catch(function (err) {
+                if (AC.isLoggedOut(err)) AC.goLogin();
+                throw err;
+              });
+            },
+            actions: {
+              get: 'aikey.get',
+              save: 'aikey.save',
+              clear: 'aikey.clear',
+              test: 'aikey.test',
+              reveal: 'aikey.reveal'
+            }
+          }),
+          footText: 'Key 只用于代你调用模型，不写日志、不进 URL。',
+          onSaved: function () { refreshAiKey(); },
+          onCleared: function () { paintAiKey({ hasKey: false }); }
+        });
+      }
+
+      function setAiKeyOpen(open) {
+        if (open) mountAiKey();
+        aiKeyBox.classList.toggle('is-hidden', !open);
+        aiKeyToggle.textContent = open ? '收起' : '管理';
+        aiKeyToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open && aiKeySection && aiKeySection.scrollIntoView) {
+          aiKeySection.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }
+      }
+
+      aiKeyToggle.addEventListener('click', function () {
+        setAiKeyOpen(aiKeyBox.classList.contains('is-hidden'));
+      });
+
+      refreshAiKey();
+      if (location.hash === '#ai-key') setAiKeyOpen(true);
     })();
   </script>
 </body>

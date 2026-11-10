@@ -11,7 +11,9 @@ const COLLECTIONS = [
   'ac_qr_codes',
   'ac_products',
   'ac_entitlements',
-  'ac_audit_logs'
+  'ac_audit_logs',
+  'ac_ai_keys',
+  'ac_persona_pool'
 ];
 
 /**

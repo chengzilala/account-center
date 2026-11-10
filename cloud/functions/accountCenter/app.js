@@ -7,6 +7,7 @@ const oauthLib = require('./lib/oauth');
 const persona = require('./lib/persona');
 const { createRateLimiter } = require('./lib/rateLimit');
 const { createCaptcha } = require('./lib/captcha');
+const { createKeyVault } = require('./lib/keyVault');
 
 const DAY = 24 * 60 * 60 * 1000;
 const SESSION_TTL = 30 * DAY;
@@ -22,8 +23,18 @@ const MAX_SESSIONS_PER_USER = 10;
 const ACTIVITY_TTL = 90 * DAY;
 const ACTIVITY_PAGE_MAX = 50;
 const TRACK_DEDUPE = 30 * 60 * 1000;
-const OAUTH_STATE_TTL = 10 * 60 * 1000;
+const OAUTH_STATE_TTL = 30 * 60 * 1000;
 const OAUTH_LOGIN_TTL = 5 * 60 * 1000;
+const MP_SIGN_TTL = 5 * 60 * 1000;
+const AIKEY_TIMEOUT = 20 * 1000;
+const AIKEY_REPLY_MAX = 80;
+/** 统一 AI 网关：一次对话最多等多久、输入/输出上限 */
+const AIKEY_CHAT_TIMEOUT = 90 * 1000;
+const AIKEY_CHAT_MAX_CHARS = 30000;
+const AIKEY_CHAT_MAX_MSG = 40;
+const AIKEY_CHAT_MAX_TOKENS = 3000;
+/** 昵称 / 头像每次给几个候选（候选池一次性生成后落库复用） */
+const PERSONA_OPTIONS_COUNT = 12;
 
 /** action → 足迹里的默认口径（分类与展示标题） */
 const EVENT_META = {
@@ -39,6 +50,7 @@ const EVENT_META = {
   'auth.qr.confirm': { scope: 'security', title: '确认扫码登录', visibleToUser: false },
   'account.credential': { scope: 'account', title: '生成账户凭证' },
   'account.profile': { scope: 'account', title: '修改资料' },
+  'account.persona.options': { scope: 'account', title: '生成昵称与头像参考' },
   'account.bind': { scope: 'account', title: '绑定登录方式' },
   'account.unbind': { scope: 'account', title: '解绑登录方式' },
   'account.code': { scope: 'security', title: '生成账户码', visibleToUser: false },
@@ -48,6 +60,13 @@ const EVENT_META = {
   'product.open': { scope: 'product', title: '打开作品' },
   'product.use': { scope: 'product', title: '使用作品' },
   'product.browse': { scope: 'browse', title: '浏览页面' },
+  // AI Key 只记「改过 / 清过」，不记内容；不进「我的足迹」
+  'aikey.save': { scope: 'account', title: '更新 AI Key', visibleToUser: false },
+  'aikey.clear': { scope: 'account', title: '清除 AI Key', visibleToUser: false },
+  'aikey.reveal': { scope: 'security', title: '查看 AI Key 明文', visibleToUser: false },
+  'aikey.test': { scope: 'security', title: '测试 AI Key 连通性', visibleToUser: false },
+  // 统一 AI 网关：只记用量，不记对话正文
+  'aikey.chat': { scope: 'account', title: '使用 AI 对话', visibleToUser: false },
   // 只留审计、不进「我的足迹」
   'email.send': { scope: 'security', title: '发送邮箱验证码', visibleToUser: false },
   'sms.send': { scope: 'security', title: '发送短信验证码', visibleToUser: false }
@@ -59,7 +78,8 @@ const LOGIN_TITLES = {
   accountCode: '账户码登录',
   transferCode: '6 位码登录',
   qr: '扫码登录',
-  ticket: '跨域登录'
+  ticket: '跨域登录',
+  mp: '微信小程序登录'
 };
 
 /** 作品上报只认这三种动作；其余直接忽略 */
@@ -81,7 +101,9 @@ function createApp({
   oauth = {},
   fetchImpl = globalThis.fetch,
   sms = null,
-  captcha = null
+  captcha = null,
+  mp = {},
+  aiKey = {}
 }) {
   if (!store || typeof store.get !== 'function') throw new Error('store 未提供');
   if (typeof sendMail !== 'function') throw new Error('sendMail 未提供');
@@ -89,9 +111,12 @@ function createApp({
 
   const limiter = createRateLimiter(now);
   const captchaBox = captcha || createCaptcha({ store, pepper, now });
+  // AI Key 单独一把密钥（未配置时由 pepper 派生）；换掉等于让所有人重填
+  const vault = createKeyVault({ secret: aiKey.secret || `${pepper}|ai-key|v1` });
 
   const oauthConfigs = (oauth && oauth.providers) || {};
   const oauthBase = String((oauth && oauth.redirectBase) || '').replace(/\/+$/, '');
+  const mpSecret = String((mp && mp.sharedSecret) || '');
 
   /** 只返回真正配好 clientId / clientSecret 的方式；没配的连入口都不出现 */
   function providerConfig(provider) {
@@ -946,6 +971,12 @@ function createApp({
 
       const stateDoc = await store.get('ac_login_codes', `oauthstate:${t.hashTicket(state, pepper)}`);
       if (!stateDoc || stateDoc.used || stateDoc.expiresAt <= now() || stateDoc.provider !== provider) {
+        logger.warn(
+          `[accountCenter] oauth 回调 state 无效 provider=${provider} len=${state.length} found=${Boolean(stateDoc)}` +
+            (stateDoc
+              ? ` used=${stateDoc.used} expired=${stateDoc.expiresAt <= now()} mismatch=${stateDoc.provider !== provider}`
+              : '')
+        );
         return oauthFail('', 'state');
       }
       await store.update('ac_login_codes', stateDoc._id, { used: true });
@@ -1140,11 +1171,45 @@ function createApp({
     };
   }
 
+  /** 昵称 / 头像的参考选项：从服务端候选池里抽 12 个，用户选中后再走 account.profile 落库 */
+  async function loadPersonaPool() {
+    const saved = await store.get('ac_persona_pool', 'default');
+    if (saved
+      && Array.isArray(saved.nicknames) && saved.nicknames.length >= PERSONA_OPTIONS_COUNT
+      && Array.isArray(saved.avatars) && saved.avatars.length >= PERSONA_OPTIONS_COUNT) {
+      return saved;
+    }
+
+    // 只在第一次（或池子损坏）时生成，之后一直复用库里这一份
+    const pool = persona.buildPool(60, 60);
+    await store.set('ac_persona_pool', 'default', { ...pool, builtAt: now() });
+    return pool;
+  }
+
+  function sampleList(list, count) {
+    const copy = list.slice();
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(0, count);
+  }
+
+  async function accountPersonaOptions(input, ctx) {
+    await requireUser(ctx);
+    const pool = await loadPersonaPool();
+
+    return {
+      nicknames: sampleList(pool.nicknames, PERSONA_OPTIONS_COUNT),
+      avatars: sampleList(pool.avatars, PERSONA_OPTIONS_COUNT)
+    };
+  }
+
   /** 头像只收图片 dataURL；传空串表示清空 */
   function normalizeAvatar(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
-    if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(raw)) {
+    if (!/^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(raw)) {
       throw invalid('头像格式不支持，请重新选择图片');
     }
     if (raw.length > AVATAR_MAX_LENGTH) {
@@ -1293,10 +1358,280 @@ function createApp({
       await store.update('ac_sessions', session.sid, { revoked: true });
     }
 
+    // 注销即销毁用户自填的 AI Key，不留残余
+    await store.remove('ac_ai_keys', user.uid);
+
     await store.update('ac_users', user.uid, { status: 'deleted', updatedAt: now() });
     await audit('account.delete', user.uid, { ...ctx, uid: user.uid });
 
     return { deleted: true };
+  }
+
+  /* ---------- AI Key 托管（按 uid 加密存放，所有作品共用一份） ---------- */
+
+  /** 只收 https；去掉末尾斜杠，拒绝带账号密码的地址 */
+  function normalizeAiBaseUrl(value) {
+    const raw = String(value || '').trim().replace(/\/+$/, '');
+    if (!raw) throw invalid('缺少服务地址');
+    if (raw.length > 300) throw invalid('服务地址过长');
+
+    let url;
+    try {
+      url = new URL(raw);
+    } catch (err) {
+      throw invalid('服务地址不是合法网址');
+    }
+    if (url.protocol !== 'https:') throw invalid('服务地址必须是 https://');
+    if (url.username || url.password) throw invalid('服务地址不能带账号密码');
+    return raw;
+  }
+
+  function aiHost(baseUrl) {
+    try {
+      return new URL(baseUrl).host;
+    } catch (err) {
+      return '';
+    }
+  }
+
+  /** 读状态：只回掩码与地址 / 模型，任何情况下都不回明文 */
+  async function aiKeyGet(input, ctx) {
+    const { user } = await requireUser(ctx);
+    const doc = await store.get('ac_ai_keys', user.uid);
+
+    return {
+      hasKey: Boolean(doc && doc.enc),
+      masked: (doc && doc.masked) || '',
+      baseUrl: (doc && doc.baseUrl) || '',
+      model: (doc && doc.model) || '',
+      updatedAt: (doc && doc.updatedAt) || 0
+    };
+  }
+
+  /** 保存：api_key 留空表示沿用已托管的 Key，只改地址 / 模型 */
+  async function aiKeySave(input, ctx) {
+    const { user } = await requireUser(ctx);
+    assertRate(`aikey.save:uid:${user.uid}`, 20, 10 * 60 * 1000);
+
+    const baseUrl = normalizeAiBaseUrl(input.base_url || input.baseUrl);
+    const model = cleanText(input.model, 120);
+    if (!model) throw invalid('模型名不能为空');
+
+    const existing = await store.get('ac_ai_keys', user.uid);
+    let apiKey = String(input.api_key || input.apiKey || '').trim();
+    if (!apiKey && existing && existing.enc) apiKey = vault.open(existing.enc);
+    if (!apiKey) throw invalid('请填写 API Key');
+    if (apiKey.length > 500) throw invalid('API Key 过长');
+    if (/\s/.test(apiKey)) throw invalid('API Key 不能包含空格或换行');
+
+    const doc = {
+      uid: user.uid,
+      enc: vault.seal(apiKey),
+      masked: vault.mask(apiKey),
+      baseUrl,
+      model,
+      createdAt: (existing && existing.createdAt) || now(),
+      updatedAt: now()
+    };
+    await store.set('ac_ai_keys', user.uid, doc);
+
+    await audit('aikey.save', user.uid, { ...ctx, uid: user.uid }, {
+      detail: { host: aiHost(baseUrl), model }
+    });
+
+    return { hasKey: true, masked: doc.masked, baseUrl, model };
+  }
+
+  /** 清除：只删这份 Key，账户与业务数据不受影响 */
+  async function aiKeyClear(input, ctx) {
+    const { user } = await requireUser(ctx);
+    assertRate(`aikey.clear:uid:${user.uid}`, 20, 10 * 60 * 1000);
+
+    const removed = await store.remove('ac_ai_keys', user.uid);
+    await audit('aikey.clear', user.uid, { ...ctx, uid: user.uid }, {
+      detail: { removed: Boolean(removed) }
+    });
+    return { ok: true };
+  }
+
+  /** 用户点「显示」时才解一次明文；单用户限流兜底 */
+  async function aiKeyReveal(input, ctx) {
+    const { user } = await requireUser(ctx);
+    assertRate(`aikey.reveal:uid:${user.uid}`, 10, 10 * 60 * 1000);
+
+    const doc = await store.get('ac_ai_keys', user.uid);
+    if (!doc || !doc.enc) throw invalid('还没有保存 Key');
+    const key = vault.open(doc.enc);
+    if (!key) throw new AppError('KEY_UNREADABLE', 'Key 无法解密，请重新填写', 400);
+
+    await audit('aikey.reveal', user.uid, { ...ctx, uid: user.uid });
+    return { key };
+  }
+
+  /** 调一次上游 /chat/completions（非流式）；测试连接与统一网关共用 */
+  async function callChat(cfg, apiKey, opts) {
+    if (typeof fetchImpl !== 'function') {
+      throw new AppError('AI_UNAVAILABLE', '服务端未启用网络请求，暂时无法调用模型', 500);
+    }
+
+    const body = {
+      model: cfg.model,
+      messages: opts.messages,
+      temperature: typeof opts.temperature === 'number' ? opts.temperature : 0.7,
+      stream: false
+    };
+    if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+    // DeepSeek 必须显式关思考模式，否则 token 翻数倍、大半时间在思考
+    if (/deepseek\.com/i.test(cfg.baseUrl)) body.thinking = { type: 'disabled' };
+
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), opts.timeout || AIKEY_TIMEOUT) : null;
+
+    try {
+      const res = await fetchImpl(`${cfg.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body),
+        signal: controller ? controller.signal : undefined
+      });
+      const text = await res.text();
+
+      let json = null;
+      try {
+        json = JSON.parse(text);
+      } catch (err) {
+        /* 非 JSON：上游异常页 */
+      }
+
+      if (!res.ok) {
+        const msg = (json && json.error && (json.error.message || json.error.code)) || `HTTP ${res.status}`;
+        throw new AppError('AI_UPSTREAM', `模型服务返回错误：${String(msg).slice(0, 160)}`, 502);
+      }
+
+      const choice = (json && json.choices && json.choices[0]) || {};
+      const reply = String((choice.message && choice.message.content) || '').trim();
+      if (!reply) throw new AppError('AI_UPSTREAM', '模型没有返回内容，请检查模型名是否可用', 502);
+      return { text: reply, usage: (json && json.usage) || null };
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      const aborted = err && err.name === 'AbortError';
+      const message = aborted ? '模型响应超时，请稍后重试' : `连接模型服务失败：${(err && err.message) || err}`;
+      throw new AppError('AI_UPSTREAM', message, 502);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /** 用一次最小对话验通 */
+  async function pingProvider(cfg, apiKey) {
+    const out = await callChat(cfg, apiKey, {
+      messages: [
+        { role: 'system', content: '你是连通性测试助手。' },
+        { role: 'user', content: '请只回复四个字：连接正常' }
+      ],
+      temperature: 0,
+      maxTokens: 24
+    });
+    return out.text.slice(0, AIKEY_REPLY_MAX);
+  }
+
+  /** 对话入参：只收 system / user / assistant，超长直接拒（不截断，避免悄悄丢上下文） */
+  function normalizeChatMessages(raw) {
+    if (!Array.isArray(raw) || !raw.length) throw invalid('缺少对话内容');
+    if (raw.length > AIKEY_CHAT_MAX_MSG) throw invalid(`对话轮次过多（最多 ${AIKEY_CHAT_MAX_MSG} 条）`);
+
+    const allowed = ['system', 'user', 'assistant'];
+    let total = 0;
+    const messages = raw.map((item) => {
+      const role = String((item && item.role) || '').toLowerCase();
+      if (allowed.indexOf(role) < 0) throw invalid('对话角色只能是 system / user / assistant');
+      const content = String((item && item.content) || '').trim();
+      if (!content) throw invalid('对话内容不能为空');
+      total += content.length;
+      return { role, content };
+    });
+
+    if (total > AIKEY_CHAT_MAX_CHARS) throw invalid(`对话内容过长（最多 ${AIKEY_CHAT_MAX_CHARS} 字）`);
+    return messages;
+  }
+
+  function clampNumber(value, min, max) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(max, Math.max(min, num));
+  }
+
+  /**
+   * 统一 AI 网关：各作品只发对话，Key 由这里读、由这里用，任何作品都拿不到明文。
+   * 模型与地址一律用已托管的配置，不接受请求指定（避免被当成任意地址的转发器）。
+   */
+  async function aiKeyChat(input, ctx) {
+    const { user } = await requireUser(ctx);
+    assertRate(`aikey.chat:uid:${user.uid}`, 60, 10 * 60 * 1000);
+
+    const messages = normalizeChatMessages(input.messages);
+
+    const doc = await store.get('ac_ai_keys', user.uid);
+    if (!doc || !doc.enc) throw new AppError('AI_NO_KEY', '还没有保存 AI Key', 400);
+    const apiKey = vault.open(doc.enc);
+    if (!apiKey) throw new AppError('KEY_UNREADABLE', 'Key 无法解密，请重新填写', 400);
+
+    const maxTokens = clampNumber(input.max_tokens || input.maxTokens, 1, AIKEY_CHAT_MAX_TOKENS);
+    const temperature = clampNumber(input.temperature, 0, 1.5);
+    const started = now();
+
+    const out = await callChat(
+      { baseUrl: doc.baseUrl, model: doc.model },
+      apiKey,
+      {
+        messages,
+        temperature: temperature === null ? 0.7 : temperature,
+        maxTokens: maxTokens === null ? 0 : Math.round(maxTokens),
+        timeout: AIKEY_CHAT_TIMEOUT
+      }
+    );
+
+    await audit('aikey.chat', user.uid, { ...ctx, uid: user.uid }, {
+      detail: {
+        host: aiHost(doc.baseUrl),
+        model: doc.model,
+        feature: cleanText(input.feature, 40),
+        inChars: messages.reduce((sum, m) => sum + m.content.length, 0),
+        outChars: out.text.length,
+        tokens: (out.usage && (out.usage.total_tokens || 0)) || 0,
+        ms: now() - started
+      }
+    });
+
+    return { text: out.text, model: doc.model, usage: out.usage };
+  }
+
+  /** 测试连接：可以用输入框里的 Key，也可以用已托管的那把 */
+  async function aiKeyTest(input, ctx) {
+    const { user } = await requireUser(ctx);
+    assertRate(`aikey.test:uid:${user.uid}`, 20, 10 * 60 * 1000);
+
+    const existing = (await store.get('ac_ai_keys', user.uid)) || {};
+    const rawBase = String(input.base_url || input.baseUrl || existing.baseUrl || '').trim();
+    const cfg = {
+      baseUrl: rawBase ? normalizeAiBaseUrl(rawBase) : '',
+      model: cleanText(input.model, 120) || existing.model || ''
+    };
+    let apiKey = String(input.api_key || input.apiKey || '').trim();
+    if (!apiKey && existing.enc) apiKey = vault.open(existing.enc);
+
+    if (!cfg.baseUrl || !cfg.model || !apiKey) {
+      throw invalid('请先填完整的服务地址、模型名与 API Key');
+    }
+
+    const reply = await pingProvider(cfg, apiKey);
+    await audit('aikey.test', user.uid, { ...ctx, uid: user.uid }, {
+      detail: { host: aiHost(cfg.baseUrl), model: cfg.model }
+    });
+    return { reply };
   }
 
   /* ---------- 我的足迹 ---------- */
@@ -1429,6 +1764,179 @@ function createApp({
     return { removed };
   }
 
+  /* ---------- 微信小程序登录（openid 由云函数代持） ---------- */
+
+  /**
+   * 校验小程序服务端调用：作品已登记 + 时间戳未过期 + 共享密钥签名正确。
+   * 返回 { productId, openid }；任何一项不满足就抛错。
+   */
+  async function verifyMpCall(input) {
+    if (!mpSecret) throw new AppError('MP_DISABLED', '小程序登录尚未开启', 403);
+
+    const productId = cleanText(input.productId, 40);
+    if (!productId) throw invalid('缺少 productId');
+    const product = await store.get('ac_products', productId);
+    if (!product) throw invalid('该作品未登记');
+    if (product.status && product.status !== 'active') throw invalid('该作品已下线');
+
+    const openid = cleanText(input.openid, 64);
+    if (!openid) throw invalid('缺少 openid');
+
+    const ts = Number(input.ts);
+    if (!Number.isFinite(ts) || Math.abs(now() - ts) > MP_SIGN_TTL) {
+      throw new AppError('CODE_EXPIRED', '请求已过期，请重新登录', 400);
+    }
+    const signature = String(input.sign || '');
+    const expected = t.hmac(`${productId}|${openid}|${ts}`, mpSecret);
+    if (!signature || !t.safeEqual(signature, expected)) throw unauthorized();
+
+    return { productId, openid };
+  }
+
+  /**
+   * 小程序没有浏览器环境，也不能让前端直接传 openid（那等于谁都能冒充谁）。
+   * 流程：wereadProxy 云函数从调用上下文取 openid → 用共享密钥对
+   * `productId|openid|ts` 签名 → 这里验签后按 `wx:<openid>` 查/建钥匙并建会话。
+   * 与邮箱 / 账户码同 uid 体系；不自动合并任何老账户。
+   */
+  async function mpLogin(input, ctx) {
+    const { productId, openid } = await verifyMpCall(input);
+
+    assertRate(`mp.login:openid:${openid}`, 10, 10 * 60 * 1000);
+    assertRate(`mp.login:ip:${ctx.ipHash}`, 60, 10 * 60 * 1000);
+
+    const { uid, isNew } = await resolveIdentity(`wx:${openid}`, 'wx', openid);
+    const session = await issueSession(uid, ctx, { appId: productId });
+    const user = await store.get('ac_users', uid);
+
+    const actorCtx = { ...ctx, uid };
+    await audit(isNew ? 'account.create' : 'auth.login', productId, actorCtx, {
+      title: isNew ? '创建账户' : LOGIN_TITLES.mp,
+      source: 'product',
+      productId,
+      platform: 'miniprogram',
+      detail: { method: 'mp' }
+    });
+
+    return {
+      ...session,
+      isNew,
+      nickname: (user && user.nickname) || '',
+      avatar: (user && user.avatar) || ''
+    };
+  }
+
+  /**
+   * 「空壳临时账户」：小程序第一次点「微信一键登录」时自动建出来的账户，
+   * 里面只有这一把 wx 钥匙，没改过昵称、没托管 Key、没领过任何权益。
+   * 这种账户在用户拿老账户的 6 位码来绑定时可以安全接管（用户明确操作，不是自动合并）。
+   */
+  async function isEmptyShell(uid) {
+    const user = await store.get('ac_users', uid);
+    if (!user || user.status === 'deleted') return false;
+
+    const keys = await store.query('ac_identities', { uid }, 10);
+    if (keys.length !== 1 || keys[0].kind !== 'wx') return false;
+
+    if (await store.get('ac_ai_keys', uid)) return false;
+    const entitlements = await store.query('ac_entitlements', { uid }, 1);
+    if (entitlements.length) return false;
+
+    return true;
+  }
+
+  /** 退役空壳账户：撤销其会话并标记注销，钥匙由调用方转移 */
+  async function retireShell(uid) {
+    const sessions = await store.query('ac_sessions', { uid }, 200);
+    for (const session of sessions) {
+      await store.update('ac_sessions', session.sid, { revoked: true });
+    }
+    await store.update('ac_users', uid, { status: 'deleted', deletedAt: now() });
+  }
+
+  /**
+   * 小程序绑定已有账户（6 位登录码）
+   *
+   * 场景：用户早先用邮箱 / 手机号注册过，小程序一键登录会新建 uid；
+   * 这里让他在网页端「生成 6 位登录码」→ 小程序里输入 → 把这把 `wx:<openid>`
+   * 挂到那个已有账户上，以后一键登录直接进同一个 uid。
+   * 钥匙已被别的账户占用时直接拒绝（一钥匙一 uid，不自动合并）。
+   */
+  async function mpBind(input, ctx) {
+    const { productId, openid } = await verifyMpCall(input);
+
+    const code = String(input.code || '').trim();
+    if (!v.isSixDigit(code)) throw new AppError('CODE_INVALID', '请输入 6 位数字', 400);
+
+    assertRate(`mp.bind:openid:${openid}`, 10, 10 * 60 * 1000);
+    assertRate(`mp.bind:ip:${ctx.ipHash}`, 30, 10 * 60 * 1000);
+
+    const codeHash = t.hashCode(code, pepper);
+    const candidates = await store.query('ac_login_codes', { kind: 'transfer', used: false }, 200);
+    const doc = candidates.find((item) => t.safeEqual(codeHash, item.codeHash));
+    if (!doc) throw new AppError('CODE_INVALID', '登录码不正确或已失效，请重新生成', 400);
+    checkCodeDoc(doc, '登录码');
+
+    const user = await store.get('ac_users', doc.uid);
+    if (!user || user.status === 'deleted') throw new AppError('ACCOUNT_DELETED', '账号已注销', 403);
+
+    const keyId = `wx:${openid}`;
+    let existing = await store.get('ac_identities', keyId);
+    let tookOver = false;
+    let shellUid = '';
+    if (existing && existing.uid !== doc.uid) {
+      if (await isEmptyShell(existing.uid)) {
+        // 老用户踩过的坑：先点了一键登录，系统给他建了个空壳账户；这里把他这唯一一把 wx 钥匙转过来
+        shellUid = existing.uid;
+        await retireShell(shellUid);
+        await store.remove('ac_identities', keyId);
+        existing = null;
+        tookOver = true;
+      } else {
+        throw new AppError('KEY_TAKEN', '这个微信已绑定到另一个账户，请先在该账户里解绑', 409);
+      }
+    }
+
+    await store.update('ac_login_codes', doc._id, { used: true });
+    if (existing) {
+      await store.update('ac_identities', keyId, { lastUsedAt: now() });
+    } else {
+      await store.set('ac_identities', keyId, {
+        uid: doc.uid,
+        kind: 'wx',
+        value: openid,
+        createdAt: now(),
+        lastUsedAt: now()
+      });
+    }
+
+    const session = await issueSession(doc.uid, ctx, { appId: productId });
+    const actorCtx = { ...ctx, uid: doc.uid };
+    await audit('account.bind', productId, actorCtx, {
+      title: '绑定微信小程序',
+      source: 'product',
+      productId,
+      platform: 'miniprogram',
+      detail: { method: 'mpBind', key: 'wx', tookOver, shellUid: shellUid || undefined }
+    });
+    await audit('auth.login', productId, actorCtx, {
+      title: LOGIN_TITLES.mp,
+      source: 'product',
+      productId,
+      platform: 'miniprogram',
+      detail: { method: 'mpBind' }
+    });
+
+    return {
+      ...session,
+      isNew: false,
+      bound: true,
+      tookOver,
+      nickname: (user && user.nickname) || '',
+      avatar: (user && user.avatar) || ''
+    };
+  }
+
   const routes = {
     'auth.email.send': emailSend,
     'auth.email.verify': emailVerify,
@@ -1437,6 +1945,8 @@ function createApp({
     'auth.sms.send': smsSend,
     'auth.sms.verify': smsVerify,
     'auth.accountCode.login': accountCodeLogin,
+    'auth.mp.login': mpLogin,
+    'auth.mp.bind': mpBind,
     'auth.code.start': codeStart,
     'auth.code.redeem': codeRedeem,
     'auth.qr.start': qrStart,
@@ -1452,8 +1962,15 @@ function createApp({
     'product.theme': productTheme,
     'account.credential': accountCredential,
     'account.profile': accountProfile,
+    'account.persona.options': accountPersonaOptions,
     'account.unbind': accountUnbind,
     'account.code.generate': accountCodeGenerate,
+    'aikey.get': aiKeyGet,
+    'aikey.save': aiKeySave,
+    'aikey.clear': aiKeyClear,
+    'aikey.reveal': aiKeyReveal,
+    'aikey.test': aiKeyTest,
+    'aikey.chat': aiKeyChat,
     'auth.logout': logout,
     'auth.logoutAll': logoutAll,
     'account.delete': accountDelete,

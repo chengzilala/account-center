@@ -35,9 +35,10 @@
           <li><strong>账户状态：</strong>创建时间、是否注销、会话数量与撤销记录。</li>
           <li><strong>安全记录：</strong>登录成功 / 失败、退出、生成 6 位码、生成凭证、注销等动作与时间；IP 只保存加盐哈希，不保存明文；浏览器信息只归并为「手机 / 桌面」。</li>
           <li><strong>页面状态：</strong>登录态保存在你本机的浏览器存储中，用于判断是否已登录。</li>
+          <li><strong>AI Key（可选）：</strong>你自己在「我的账户 → AI Key」填写的厂商 API Key，以及服务地址与模型名。Key 按账户加密保存（AES-256-GCM），页面与日志只出现掩码，仅用于代你调用所选模型，可随时一键清除。</li>
         </ul>
         <p>
-          我们<strong>不收集</strong>：微信读书 Key、高驰 Token、DeepSeek Key 等第三方凭证；
+          我们<strong>不收集</strong>：微信读书 Key、高驰 Token 等各作品内的第三方凭证；
           各作品的跑步轨迹、书架、笔记、阅读人格等业务数据；通讯录、相册、定位与广告标识。
         </p>
       </section>
@@ -50,6 +51,7 @@
           <li>判断装置的开通状态与访问权限；</li>
           <li>发送登录验证码，并处理找回、换设备等场景；</li>
           <li>发现异常登录、限流与锁定，维护账户安全；</li>
+          <li>在你主动配置 AI Key 后，代你调用所选模型服务；</li>
           <li>在你主动操作时生成账户凭证图片。</li>
         </ul>
       </section>
@@ -160,7 +162,7 @@
 
       <footer class="ac-foot">
         <span>账户中心</span>
-        <span><a href="login.html">返回登录</a> · <a href="terms.html">用户协议</a> · © 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a></span>
+        <span><a href="login.html">返回登录</a> · <a href="terms.html">用户协议</a> · © 2026 <a href="https://chesterlee.cn/" target="_blank" rel="noopener">Chester</a> · <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">陇ICP备2026009894号-2</a> · <a href="https://beian.mps.gov.cn/#/query/webSearch?code=62052302000062" target="_blank" rel="noopener"><img src="/assets/img/beian-police.png" alt="公安备案" width="16" height="16" style="vertical-align:-3px;margin-right:4px;border:0">甘公网安备62052302000062号</a></span>
       </footer>
     </main>
   </div>

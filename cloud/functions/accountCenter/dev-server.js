@@ -35,7 +35,9 @@ const app = createApp({
     console.log(`[accountCenter][dev-mail] 发给 ${to} 的验证码：${code}（10 分钟内有效）`);
   },
   sms,
-  oauth: oauthLib.configFromEnv(process.env)
+  oauth: oauthLib.configFromEnv(process.env),
+  // 本机调试用默认密钥；线上必须走环境变量 MP_SHARED_SECRET
+  mp: { sharedSecret: process.env.MP_SHARED_SECRET || 'dev-only-mp-secret' }
 });
 
 const OAUTH_CALLBACK = /^\/oauth\/([a-z]+)\/callback$/;

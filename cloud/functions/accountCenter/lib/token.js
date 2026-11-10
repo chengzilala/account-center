@@ -28,6 +28,11 @@ function sha256(value) {
   return crypto.createHash('sha256').update(String(value)).digest('hex');
 }
 
+/** 服务端之间的签名（小程序云函数 → 账户中心），密钥只放环境变量 */
+function hmac(value, secret) {
+  return crypto.createHmac('sha256', String(secret)).update(String(value)).digest('hex');
+}
+
 function hashToken(token, pepper) {
   return sha256(`${pepper}|token|${token}`);
 }
@@ -59,6 +64,7 @@ module.exports = {
   newSid,
   newSixDigitCode,
   sha256,
+  hmac,
   hashToken,
   hashCode,
   newTicket,

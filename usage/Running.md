@@ -60,7 +60,7 @@ open -a "Google Chrome" "http://localhost:18830/?api=http://127.0.0.1:28741"
 
 目录：`cloud/functions/accountCenter/`，核心逻辑在 `app.js`，与部署平台无关。
 
-跑测试（24 项，覆盖登录 / 绑定 / 6 位码 / 退出 / 注销 / 限流 / 账户凭证 / 我的足迹 / 90 天清理 / 跨域票据 / 第三方登录 / HTTP 入口）：
+跑测试（45 项，覆盖登录 / 绑定 / 6 位码 / 退出 / 注销 / 限流 / 账户凭证 / 我的足迹 / 90 天清理 / 跨域票据 / 第三方登录 / HTTP 入口 / AI Key 托管）：
 
 ```bash
 cd /Users/Admin/Knowledge/Coding/account-center
@@ -84,6 +84,10 @@ curl -s http://localhost:8942/healthz
 ## 4. 生产部署（与奶茶同台轻量服务器）
 
 > **已按本节完成（2026-10-28）**：域名 `account.chesterlee.cn` → `43.136.92.125`，代码在 `/srv/chesterlee/account`，服务 `account-center.service`（`User=ubuntu`，`127.0.0.1:8940`），数据 `/var/lib/account-center/store.json`。下面是复现步骤 + 日常更新命令。
+>
+> **AI Key 托管已上线（2026-11-04）**：`aikey.get / save / clear / reveal / test` 五个动作可调；`AI_KEY_SECRET` 已在服务器 `/etc/account-center.env` 生成写入（`openssl rand -hex 32`，600 root），**此后不可更换**。
+>
+> **AI Key 面板已并入本仓（2026-11-10）**：源码在 `web/assets/ai-key/v1/`，随下面第二条 `web/` 同步即上线（账户页同源引用，其他作品引用 `https://account.chesterlee.cn/assets/ai-key/v1/`）；不再有独立的 publish 流程。
 
 日常更新（改完代码 / 页面后）：
 
@@ -138,6 +142,9 @@ DATA_FILE=/var/lib/account-center/store.json
 ALLOWED_ORIGINS=https://account.chesterlee.cn,https://chesterlee.cn,https://www.chesterlee.cn
 PORT=8940
 
+# AI Key 托管加密密钥（可选；不填则由 TOKEN_PEPPER 派生。填了以后不可再改，否则用户已托管的 Key 全部失效）
+AI_KEY_SECRET=
+
 # 第三方登录（要用哪个就填哪个；不填 = 该平台自动隐藏、页面不出现按钮）
 OAUTH_REDIRECT_BASE=https://account.chesterlee.cn
 GITHUB_CLIENT_ID=
@@ -155,7 +162,7 @@ ALIYUN_SMS_SIGN_NAME=
 ALIYUN_SMS_TEMPLATE_CODE=
 ```
 
-生成随机串：`openssl rand -hex 32`。`ALLOWED_ORIGINS` 必须包含官网裸域与 `www`，否则官网页跨域调接口会被浏览器拦截。第三方平台的 `Client Secret` 等同密码，只写在这里，不提交仓库、不写日志。
+生成随机串：`openssl rand -hex 32`。`ALLOWED_ORIGINS` 必须包含官网裸域与 `www`，否则官网页跨域调接口会被浏览器拦截。第三方平台的 `Client Secret` 等同密码，只写在这里，不提交仓库、不写日志。`AI_KEY_SECRET` 与 `TOKEN_PEPPER` 一样，**换掉就等于清空所有用户托管的 AI Key**。
 
 ### 4.2 systemd 守护
 
@@ -229,7 +236,7 @@ account.chesterlee.cn {
 
 代码已全部就绪，差的是「在平台建应用 / 开通服务 + 填服务端环境变量」。各自独立，填哪个就出现哪个入口。
 
-> **当前线上状态（2026-10-28）**：GitHub（App id 3972427）与 Gitee（App id 58686）已建应用，密钥已写入 `/etc/account-center.env`，`OAUTH_REDIRECT_BASE=https://account.chesterlee.cn`，Caddy 已转发 `/oauth/*`；Microsoft 未配置（需 Azure 订阅，见 §5.3）。
+> **当前线上状态（2026-11-10）**：GitHub（App id 3972427）、Gitee（App id 58686）、Microsoft（App ID `f5b52197-df84-4fe5-a4c5-146c77bcff91`，`MICROSOFT_TENANT=common`）三家已配置，密钥已写入 `/etc/account-center.env`，`OAUTH_REDIRECT_BASE=https://account.chesterlee.cn`，Caddy 已转发 `/oauth/*`。微软登录已线上实测通过（首次授权即建号/绑定）。
 > 密钥只存两处：本机 `.autoshot/oauth-*.json`（600，已 gitignore）与服务器 env（600），**不要写进任何文档或仓库**。
 > 建应用可用本机脚本驱动真实 Chrome：`node tools/oauth-setup.js github|github-secret|gitee|gitee-read`。
 
@@ -250,15 +257,15 @@ account.chesterlee.cn {
 
 ### 5.3 Microsoft
 
-> **前提：需要 Azure 订阅（能进 Azure Portal / Microsoft Entra ID）**。只有个人 Microsoft 账号、没有 Azure 订阅时无法创建应用，登录页也就不会显示 Microsoft 按钮。补齐订阅后按下面步骤做，代码无需改动。
+> **前提：一个能登录的 Microsoft 账号即可（不需要 Azure 订阅、不需要绑卡）**。直接用个人账号登录 <https://entra.microsoft.com> → 首次进入会提示「创建一个目录/租户」，免费创建（Free 版，不要求信用卡），然后在「应用注册」建应用。Azure Portal 的「免费账户」注册才是要绑卡的，**这条路径可以完全跳过**。
 >
-> **怎么拿到订阅**：打开 <https://azure.microsoft.com/zh-cn/free/> → 用个人 Microsoft 账号（outlook / hotmail 即可）→ 手机验证 + 信用卡/借记卡验证（非预付卡，只做身份核验，约 ¥7 / $1 预授权会退回）→ 注册完成即自带一个 **Entra ID 租户（Free 版）**。应用注册本身**免费**，免费账户 30 天 $200 额度用完不自动扣费。建应用入口：<https://entra.microsoft.com> → 标识 → 应用注册。不想绑卡就先不接，GitHub + Gitee 已够用。
+> 免费租户局限：无 Azure 资源（虚拟机/存储等），但**应用注册、OAuth 登录、Graph `User.Read` 全部可用**，正好够账户中心用。
 
-1. Azure Portal → **Microsoft Entra ID** → 应用注册 → 新注册。
-2. 账户类型选「任何组织目录中的账户和个人 Microsoft 账户」。
+1. <https://entra.microsoft.com> → 标识 → 应用注册 → 新注册。
+2. 账户类型选「任何组织目录中的账户和个人 Microsoft 账户」（多租户 + 个人账号）。
 3. 重定向 URI 选 **Web**，填 `https://account.chesterlee.cn/oauth/microsoft/callback`。
-4. 「证书和密码」→ 新建客户端密码，拿 **值**（只显示一次）；「API 权限」确认有 Microsoft Graph 的 `User.Read`。
-5. 写进 `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`；`MICROSOFT_TENANT=common`。
+4. 「证书和密码」→ 新建客户端密码，拿 **值**（只显示一次，40 位）；「API 权限」确认有 Microsoft Graph 的 `User.Read`（新注册默认自带，无需管理员同意）。
+5. 写进 `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`；`MICROSOFT_TENANT=common`，重启服务。
 
 ### 5.4 本机联调
 
