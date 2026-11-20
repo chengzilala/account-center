@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>运营后台 · chesterlee</title>
+  <link rel="stylesheet" href="../assets/ac.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body class="adm">
+  <div id="boot" class="adm-boot">正在校验身份…</div>
+
+  <div id="denied" class="adm-denied" hidden>
+    <h1>没有后台权限</h1>
+    <p id="deniedText">当前账户不在后台成员名单里。如需开通，请让 owner 在「管理员」里添加。</p>
+    <p><a href="../account.html">返回我的账户</a></p>
+  </div>
+
+  <div id="app" class="adm-app" hidden>
+    <aside class="adm-side">
+      <div class="adm-brand">运营后台</div>
+      <nav class="adm-nav">
+        <button class="adm-nav-item is-on" data-tab="overview">总览</button>
+        <button class="adm-nav-item" data-tab="users">用户</button>
+        <button class="adm-nav-item" data-tab="products">作品与权益</button>
+        <button class="adm-nav-item" data-tab="release">发布</button>
+        <button class="adm-nav-item" data-tab="audit">审计</button>
+      </nav>
+      <div class="adm-me">
+        <span id="meLabel">—</span>
+        <a href="../account.html">我的账户</a>
+      </div>
+    </aside>
+
+    <main class="adm-main">
+      <section class="adm-panel" id="panel-overview">
+        <h1 class="adm-title">总览</h1>
+        <div class="adm-cards" id="overviewCards"></div>
+        <h2 class="adm-subtitle">各作品使用量（按登录进过的用户数）</h2>
+        <div class="adm-table-wrap"><table class="adm-table" id="overviewProducts"></table></div>
+        <h2 class="adm-subtitle">最近 20 条审计</h2>
+        <ul class="adm-list" id="overviewAudit"></ul>
+      </section>
+
+      <section class="adm-panel" id="panel-users" hidden>
+        <h1 class="adm-title">用户</h1>
+        <div class="adm-toolbar">
+          <input id="userKeyword" class="adm-input" type="search" placeholder="搜 uid / 昵称 / 邮箱 / 手机">
+          <select id="userStatus" class="adm-input">
+            <option value="all">全部状态</option>
+            <option value="active">正常</option>
+            <option value="disabled">已禁用</option>
+          </select>
+          <button id="userSearch" class="adm-btn adm-btn--solid" type="button">搜索</button>
+        </div>
+        <div class="adm-table-wrap"><table class="adm-table" id="userTable"></table></div>
+        <div class="adm-pager" id="userPager"></div>
+      </section>
+
+      <section class="adm-panel" id="panel-products" hidden>
+        <h1 class="adm-title">作品与权益</h1>
+        <p class="adm-hint">accessMode = open：登录即可用；grant：必须有有效授权，作品侧读 <code>me.products</code> 时拿不到就给 <code>locked</code>。</p>
+        <div class="adm-table-wrap"><table class="adm-table" id="productTable"></table></div>
+
+        <h2 class="adm-subtitle">单用户授权</h2>
+        <div class="adm-form">
+          <input id="grantUid" class="adm-input" placeholder="用户 uid">
+          <select id="grantProduct" class="adm-input"></select>
+          <input id="grantExpire" class="adm-input" type="date" title="到期日（留空 = 长期）">
+          <input id="grantNote" class="adm-input" placeholder="备注（可选）">
+          <button id="grantSubmit" class="adm-btn adm-btn--solid" type="button">授权</button>
+        </div>
+      </section>
+
+      <section class="adm-panel" id="panel-release" hidden>
+        <h1 class="adm-title">发布</h1>
+        <p class="adm-hint">只记账、不执行 git：点「新建发布」拿到命令，本地推送成功后回填 commit 与两端链接。发布 ≠ 部署，部署仍按 deploy-site 单独做。</p>
+        <div class="adm-cards" id="releaseCurrent"></div>
+        <div class="adm-toolbar" style="margin-top:14px">
+          <button id="releaseNew" class="adm-btn adm-btn--solid" type="button">新建发布</button>
+          <select id="releaseStatus" class="adm-input">
+            <option value="all">全部状态</option>
+            <option value="planned">待发布</option>
+            <option value="pushed">已推送</option>
+            <option value="failed">失败</option>
+            <option value="cancelled">已作废</option>
+          </select>
+        </div>
+        <div id="releaseList"></div>
+        <div class="adm-pager" id="releasePager"></div>
+      </section>
+
+      <section class="adm-panel" id="panel-audit" hidden>
+        <h1 class="adm-title">审计</h1>
+        <div class="adm-toolbar">
+          <input id="auditUid" class="adm-input" placeholder="uid（目标或操作人）">
+          <input id="auditAction" class="adm-input" placeholder="action 前缀，如 auth.login / admin.">
+          <button id="auditSearch" class="adm-btn adm-btn--solid" type="button">查询</button>
+        </div>
+        <ul class="adm-list" id="auditList"></ul>
+        <div class="adm-pager" id="auditPager"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="adm-modal" id="userModal" hidden>
+    <div class="adm-modal-box">
+      <button class="adm-modal-close" id="modalClose" type="button" aria-label="关闭">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="adm-modal" id="releaseModal" hidden>
+    <div class="adm-modal-box">
+      <button class="adm-modal-close" data-close-release type="button" aria-label="关闭">×</button>
+      <div id="releaseModalBody"></div>
+    </div>
+  </div>
+
+  <div class="adm-toast" id="toast" hidden></div>
+
+  <script src="../assets/ac.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

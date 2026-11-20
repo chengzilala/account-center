@@ -8,6 +8,7 @@ const persona = require('./lib/persona');
 const { createRateLimiter } = require('./lib/rateLimit');
 const { createCaptcha } = require('./lib/captcha');
 const { createKeyVault } = require('./lib/keyVault');
+const { createAdmin } = require('./lib/admin');
 
 const DAY = 24 * 60 * 60 * 1000;
 const SESSION_TTL = 30 * DAY;
@@ -25,6 +26,7 @@ const ACTIVITY_PAGE_MAX = 50;
 const TRACK_DEDUPE = 30 * 60 * 1000;
 const OAUTH_STATE_TTL = 30 * 60 * 1000;
 const OAUTH_LOGIN_TTL = 5 * 60 * 1000;
+const OAUTH_PENDING_TTL = 10 * 60 * 1000;
 const MP_SIGN_TTL = 5 * 60 * 1000;
 const AIKEY_TIMEOUT = 20 * 1000;
 const AIKEY_REPLY_MAX = 80;
@@ -103,7 +105,8 @@ function createApp({
   sms = null,
   captcha = null,
   mp = {},
-  aiKey = {}
+  aiKey = {},
+  admin: adminConfig = {}
 }) {
   if (!store || typeof store.get !== 'function') throw new Error('store 未提供');
   if (typeof sendMail !== 'function') throw new Error('sendMail 未提供');
@@ -155,6 +158,7 @@ function createApp({
       productId: String(extra.productId || '').slice(0, 40),
       title: String(extra.title || meta.title || action).slice(0, 60),
       detail: extra.detail || {},
+      actorRole: String(extra.actorRole || '').slice(0, 20),
       visibleToUser: visible,
       ipHash: ctx.ipHash || '',
       ua: String(ctx.ua || '').slice(0, 200),
@@ -234,6 +238,7 @@ function createApp({
     const user = await store.get('ac_users', session.uid);
     if (!user) throw unauthorized();
     if (user.status === 'deleted') throw new AppError('ACCOUNT_DELETED', '账号已注销', 403);
+    if (user.status === 'disabled') throw new AppError('ACCOUNT_DISABLED', '账号已被禁用，请联系管理员', 403);
 
     const patch = {};
     if (session.expiresAt - now() < SESSION_RENEW_BEFORE) patch.expiresAt = now() + SESSION_TTL;
@@ -249,6 +254,9 @@ function createApp({
 
     if (identity) {
       const user = await store.get('ac_users', identity.uid);
+      if (user && user.status === 'disabled') {
+        throw new AppError('ACCOUNT_DISABLED', '账号已被禁用，请联系管理员', 403);
+      }
       if (user && user.status !== 'deleted') {
         await store.update('ac_identities', keyId, { lastUsedAt: now() });
         return { uid: identity.uid, isNew: false };
@@ -527,6 +535,13 @@ function createApp({
 
     assertRate(`accountCode:ip:${ctx.ipHash}`, 10, 10 * 60 * 1000);
     assertRate(`accountCode:ip:day:${ctx.ipHash}`, 50, DAY);
+
+    // 没绑定过任何账户的账户码：不静默建号（打错一位或旧系统凭证都会凭空多一个账户），
+    // 先让页面确认「确实要用它创建新账户」
+    const known = await store.get('ac_identities', `device:${code}`);
+    if (!known && input.confirmCreate !== true) {
+      return { needConfirm: true, accountCode: code };
+    }
 
     const { uid, isNew } = await resolveIdentity(`device:${code}`, 'device', code);
     const newDevice = !isNew && !(await hasSeenDevice(uid, code));
@@ -859,7 +874,7 @@ function createApp({
     if (!isTrustedOrigin(url.origin)) throw invalid('returnUrl 不在允许的页面域名内');
     if (!/\/(login|account)\.html$/.test(url.pathname)) throw invalid('returnUrl 必须是登录页或账户页');
     // 回调结果参数由服务端重新写，别的一律抹掉，避免二次拼接
-    ['oauth_code', 'oauth_error', 'oauth_bound'].forEach((key) => url.searchParams.delete(key));
+    ['oauth_code', 'oauth_error', 'oauth_bound', 'oauth_pending'].forEach((key) => url.searchParams.delete(key));
     return url;
   }
 
@@ -1048,9 +1063,21 @@ function createApp({
             if (owner && owner.status !== 'deleted') return oauthFail(returnUrl, 'email_exists');
           }
         }
-        const resolved = await resolveIdentity(keyId, 'oauth', profile.login || profile.id, { provider });
-        uid = resolved.uid;
-        isNew = resolved.isNew;
+        // 没绑过的新第三方账号：不静默建号，先让用户确认「新建 / 绑到已有账户」
+        const pendingTicket = t.newTicket();
+        await store.set('ac_login_codes', `oauthpending:${t.hashTicket(pendingTicket, pepper)}`, {
+          kind: 'oauth_pending',
+          keyId,
+          provider,
+          login: profile.login || profile.id,
+          name: profile.name || '',
+          email: profile.email || '',
+          avatar: profile.avatar || '',
+          expiresAt: now() + OAUTH_PENDING_TTL,
+          used: false,
+          createdAt: now()
+        });
+        return redirectResponse(pageWithParam(returnUrl, 'oauth_pending', pendingTicket));
       }
       await fillProfile(uid, profile);
 
@@ -1109,6 +1136,85 @@ function createApp({
     }
 
     return { ...session, isNew: Boolean(doc.isNew) };
+  }
+
+  /** 取首次登录待确认票据；过期 / 用过一律当失效 */
+  async function pendingTicketDoc(raw) {
+    const ticket = String(raw || '').trim();
+    if (!/^[0-9a-f]{32}$/.test(ticket)) {
+      throw new AppError('CODE_INVALID', '授权已过期，请重新点一次登录', 400);
+    }
+    const doc = await store.get('ac_login_codes', `oauthpending:${t.hashTicket(ticket, pepper)}`);
+    if (!doc || doc.kind !== 'oauth_pending' || doc.used || doc.expiresAt <= now()) {
+      throw new AppError('CODE_INVALID', '授权已过期，请重新点一次登录', 400);
+    }
+    return doc;
+  }
+
+  /** 首次第三方登录：先告诉页面是哪个账号，由用户决定新建还是绑定 */
+  async function oauthPending(input, ctx) {
+    assertRate(`oauth.pending:ip:${ctx.ipHash}`, 40, 10 * 60 * 1000);
+    const doc = await pendingTicketDoc(input.ticket);
+    return {
+      provider: doc.provider,
+      providerName: oauthLib.providerName(doc.provider),
+      name: doc.name,
+      email: doc.email,
+      expiresAt: doc.expiresAt
+    };
+  }
+
+  /** 用户确认「这是新账户」：这时才真正建号 */
+  async function oauthPendingCreate(input, ctx) {
+    assertRate(`oauth.pending:ip:${ctx.ipHash}`, 40, 10 * 60 * 1000);
+    const doc = await pendingTicketDoc(input.ticket);
+    await store.update('ac_login_codes', doc._id, { used: true });
+
+    const resolved = await resolveIdentity(doc.keyId, 'oauth', doc.login || doc.keyId, {
+      provider: doc.provider
+    });
+    const profile = { name: doc.name, login: doc.login, avatar: doc.avatar, email: doc.email };
+    await fillProfile(resolved.uid, profile);
+
+    const session = await issueSession(resolved.uid, ctx, { deviceId: input.deviceId });
+    await audit('account.create', resolved.uid, { ...ctx, uid: resolved.uid }, {
+      title: '创建账户',
+      detail: { method: 'oauth', provider: doc.provider },
+      platform: 'web'
+    });
+    return { ...session, isNew: resolved.isNew };
+  }
+
+  /** 用户确认「我已有账户」：登录后把该第三方钥匙挂到当前 uid */
+  async function oauthPendingBind(input, ctx) {
+    assertRate(`oauth.pending:ip:${ctx.ipHash}`, 40, 10 * 60 * 1000);
+    const { user } = await requireUser(ctx);
+    const doc = await pendingTicketDoc(input.ticket);
+
+    const existing = await store.get('ac_identities', doc.keyId);
+    if (existing) {
+      if (existing.uid === user.uid) {
+        await store.update('ac_login_codes', doc._id, { used: true });
+        return { provider: doc.provider, already: true };
+      }
+      throw new AppError('KEY_TAKEN', '这个第三方账号已绑定到另一个账户', 409);
+    }
+
+    await store.update('ac_login_codes', doc._id, { used: true });
+    await store.set('ac_identities', doc.keyId, {
+      uid: user.uid,
+      kind: 'oauth',
+      provider: doc.provider,
+      value: doc.login || doc.keyId,
+      createdAt: now(),
+      lastUsedAt: now()
+    });
+    await fillProfile(user.uid, { name: doc.name, login: doc.login, avatar: doc.avatar, email: doc.email });
+    await audit('account.bind', doc.provider, { ...ctx, uid: user.uid }, {
+      title: `绑定 ${oauthLib.providerName(doc.provider)}`,
+      detail: { provider: doc.provider }
+    });
+    return { provider: doc.provider, already: false };
   }
 
   async function me(input, ctx) {
@@ -1284,13 +1390,27 @@ function createApp({
     const granted = new Map(entitlements.map((item) => [item.appId, item]));
 
     return {
-      products: products.map((product) => ({
-        appId: product.appId,
-        name: product.name,
-        url: product.url,
-        // 首期规则：没有单独记录 = 登录即可用
-        status: (granted.get(product.appId) || {}).status || 'active'
-      }))
+      products: products.map((product) => {
+        // 缺省 open：保持改造前的行为；grant：必须有一条未过期的 active 授权
+        const accessMode = product.accessMode === 'grant' ? 'grant' : 'open';
+        const record = granted.get(product.appId) || null;
+        const usable = Boolean(record)
+          && (record.status || 'active') === 'active'
+          && (!record.expiresAt || record.expiresAt > now());
+
+        let status = 'active';
+        if (accessMode === 'grant' && !usable) status = 'locked';
+        else if (record && !usable) status = 'disabled';
+
+        return {
+          appId: product.appId,
+          name: product.name,
+          url: product.url,
+          accessMode,
+          status,
+          expiresAt: (record && record.expiresAt) || 0
+        };
+      })
     };
   }
 
@@ -1937,6 +2057,17 @@ function createApp({
     };
   }
 
+  // 运营后台（admin.*）：独立模块，复用同一个 store / 审计 / Token 校验
+  const adminRoutes = createAdmin({
+    store,
+    now,
+    requireUser,
+    audit,
+    ownerUids: (adminConfig && adminConfig.ownerUids) || [],
+    repos: (adminConfig && adminConfig.repos) || {},
+    projectVersion: (adminConfig && adminConfig.projectVersion) || ''
+  }).routes;
+
   const routes = {
     'auth.email.send': emailSend,
     'auth.email.verify': emailVerify,
@@ -1957,6 +2088,9 @@ function createApp({
     'auth.oauth.providers': oauthProviders,
     'auth.oauth.start': oauthStart,
     'auth.oauth.exchange': oauthExchange,
+    'auth.oauth.pending': oauthPending,
+    'auth.oauth.pendingCreate': oauthPendingCreate,
+    'auth.oauth.pendingBind': oauthPendingBind,
     me,
     'me.products': meProducts,
     'product.theme': productTheme,
@@ -1976,7 +2110,8 @@ function createApp({
     'account.delete': accountDelete,
     track,
     'me.activity': meActivity,
-    'me.activity.clear': meActivityClear
+    'me.activity.clear': meActivityClear,
+    ...adminRoutes
   };
 
   function parseBody(raw) {

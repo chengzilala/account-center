@@ -195,5 +195,55 @@
 - **关键结论/决定**：不需要 Azure 订阅、不需要绑卡——个人 Microsoft 账号登录 Entra 管理中心即可免费建租户并注册应用，`User.Read`（Delegated）为新注册默认自带、无需管理员同意；`MICROSOFT_TENANT=common` 同时覆盖组织账号与个人 MSA；首次微软登录按「第三方登录独立建号」规则新建了 uid `u_ea3d5492106e2f97`（与邮箱账户不自动合并）。
 - **产出物（文件/链接）**：`usage/Running.md`（§5 状态行 + §5.3 改写为免绑卡路径）、`.autoshot/entra-read-secret.js`（新建）、`.autoshot/entra-perms.js`（新建）、`.autoshot/entra-reg4.js`（注册应用）。
 - **验证**：`curl /accountCenter {"action":"auth.oauth.providers"}` 含 microsoft；`systemctl is-active account-center` = active、`/healthz` = `{"ok":true}`；store 内 `oauth:microsoft:57d45699aa2f5dc9` → uid 绑定正确；浏览器实测登录后账户页显示 Microsoft 登录方式。
-- **待办**：① 若希望微软账号与既有邮箱账户合并，需先登录既有账户在账户页点「添加登录方式」再绑；② 秘密 730 天后到期（2028-11-09），到期前轮换；③ 本轮未 `git commit`。
+- **待办**：① 秘密 730 天后到期（2028-11-09），到期前轮换；② 本轮未 `git commit`。
 - **风险/注意事项**：`MICROSOFT_CLIENT_SECRET` 只存两处（本机 `~/.config/account-center/microsoft.env` 与服务器 `/etc/account-center.env`，均 600），不入库不写日志；Entra 页面关闭后秘密值不再显示，丢失只能重建；免费租户无 Azure 资源但不影响 OAuth。
+
+### 2026-11-10 补充：微软钥匙归位到主账户
+
+- **问题**：首次实测按「第三方独立建号」生成了空账户 `u_ea3d5492106e2f97`（诚 张），占住了微软钥匙；用户在真正的主账户 `u_7ad0ee59bb400e2c`（橘子味的汤圆）里点「连接 Microsoft」被 `KEY_TAKEN` 挡住，且 state 二次回调报「授权已过期」。
+- **根因**：同一把 `oauth:microsoft:57d45699aa2f5dc9` 只能属于一个 uid；绑定失败后回跳登录页，state 已被消费才会出现「已过期」。
+- **处理**：备份 `store.json` 后停服清理空账户（user 1 / identity 1 / session 2 / code 5），再把 `oauth:microsoft:57d45699aa2f5dc9` 直接写回主账户 uid（等价于绑定成功）；重启后实测「用 Microsoft 登录」直接进入橘子味的汤圆（20:04 auth.login），主账户现有 6 把钥匙。
+- **顺带**：`OAUTH_STATE_TTL` 10 → 30 分钟；`handleOAuthCallback` 的 state 失效分支加 `logger.warn`（provider / len / found / used / expired / mismatch）。
+
+### 2026-11-10 二次修复：第三方首次登录改为「先确认，不静默建号」
+
+- **为什么**：上面那次事故的根因不是状态过期，而是**首次第三方登录会静默建一个空账户**并抢走钥匙；用户之后想把同一把钥匙绑到老账户就会被 `KEY_TAKEN` 挡住。
+- **改法**：`handleOAuthCallback` 在「钥匙不存在」时不再 `resolveIdentity` 建号，只写一条一次性 `oauth_pending` 票据（10 分钟）并回跳 `login.html?oauth_pending=…`；登录页新增确认面板，两个选择 → `auth.oauth.pendingCreate`（确认新建）/ `auth.oauth.pendingBind`（用已有方式登录后自动绑定）。
+- **兼容**：已绑定的第三方再次登录仍走原 `oauth_code` 快路径；`email_exists` 拦截保留；跨域登录（productId + returnUrl）票据随 returnUrl 一起带上，两种选择都能正常签票跳回。
+- **验证**：`node --test` 53 项全过（新增「首次不建号」「选已有账户绑定、不新增用户」两条，并把 state 过期的推进时间改为 31 分钟以匹配 30 分钟 TTL）；线上实测已绑定微软仍直达「橘子味的汤圆」；伪造票据回 400 并回到「选择登录方式」；确认面板渲染正常（截图核对）。
+- **文档**：需求文档新增第 23 条。
+
+### 2026-11-11 修复：账户码登录静默建号 + 清理空账户
+
+- **现象**：在微信小程序设置页复制「账户码」（32 位），粘到 H5「账户码登录」→ 变成了一个全新用户。
+- **根因**：`auth.accountCode.login` 用 `device:<code>` 直接 `resolveIdentity`，找不到就建号；而小程序那把「账户码」是**旧系统本机 deviceId**，账户中心里根本没有这个键，于是每次都新建。另外账户页生成的「账户码」也是以 `device:` 键存储，两种码长得一样、来源不同，用户无从分辨。
+- **修复**：码未绑定时先回 `{ needConfirm: true }`（不建号、不发 Token）；登录页新增确认块「这个账户码没有对应账户，确认用它创建新账户？」→ 用户点确认才带 `confirmCreate: true` 建号；取消则回到表单并提示改用邮箱登录。页面文案补一句「微信小程序里的账户码是旧系统凭证，不是这里的登录码」。
+- **数据清理**（已备份 store.json）：删除 4 个空账户——15:20 误建的 `u_573c6cb8f9be2972`（会游泳的海豚）与 3 个只绑微信、零数据的 `u_c47335ba` / `u_0a447952` / `u_9ce8badf`；共 4 用户 / 4 钥匙 / 6 会话 / 1 临时码，用户数 32 → 28。
+- **验证**：`node --test` 54 项全过（新增「未绑定不建号、确认后才建」；旧码测试改为断言 `needConfirm`）；线上实测未绑定码 → `needConfirm` 且库中无新身份；确认 UI 截图核对。
+- **跨端方案（已与用户确认）**：小程序不再复制旧码，改走「网页账户页生成 6 位码 → 小程序『绑定已有账户』」。
+
+### 2026-11-16 运营后台 v1（用户 → 权益 → 总览 + 审计）
+
+- **已做**：① 需求落库——`plan/RPD_需求文档.md` 升 v1.8，§3.4 扩写为「运营后台」章节（v1 范围 / 数据模型 / 接口 / 三角色 / 准入模式 / 明确不做），分阶段计划加「阶段 6」；② 后端新增 `lib/admin.js`（14 个 `admin.*`，Token → `ac_admin_members` 角色 → 写审计），`store-json.js` 增 `ac_admin_members` / `ac_admin_notes` 两个集合；③ `app.js` 接入 admin 路由、`audit()` 增 `actorRole`、`requireUser` 与钥匙解析都拦 `status=disabled`、`me.products` 支持 `accessMode`（缺省 open，grant 无授权返回 `locked`）；④ `server.js` / `dev-server.js` 支持 `ADMIN_OWNER_UIDS` 引导首个 owner；⑤ 前端新增 `web/admin/`（`index.html` + `admin.css` + `admin.js`：总览 / 用户 / 作品与权益 / 审计，复用 `assets/ac.js` 与 `ps_token`）；⑥ `README.md` 补「运营后台」章节与目录；`plan/接入契约.md` 新增 §4.29，§4.7 与 §4.19.5 同步。
+- **关键结论/决定**：线上 7 个作品全部保持 `open`，不批量切 `grant`（切之前必须先补授权，否则会锁人）；试点候选 `map-notes`（历史登录用户仅 1）、`work-persona`（1）；`me.products` 目前只有账户页与微信悦读小程序云函数在调，作品侧要真正拦截需再改作品代码。
+- **产出物（文件/链接）**：`cloud/functions/accountCenter/lib/admin.js`（新建）、`web/admin/{index.html,admin.css,admin.js}`（新建）、`plan/RPD_需求文档.md`、`plan/接入契约.md`、`README.md`、`store-json.js` / `app.js` / `server.js` / `dev-server.js`（增量改）。
+- **验证**：`node /tmp/verify-admin.js` 12 项全过（owner 自动落库、普通用户 FORBIDDEN、邮箱搜索、详情掩码、grant locked → 授权 active、备注、禁用即下线且 Token 失效、审计可查、总览、不能禁用自己）；原有 `node test/account.test.js` 全过（fail 0）。
+- **待办**：① 部署：`web/admin/` rsync 到 `/srv/chesterlee/account/web/admin/`、`lib/admin.js` 等同步后重启 `account-center`，并在 `/etc/account-center.env` 加 `ADMIN_OWNER_UIDS=<uid>`；② 试点作品接 `me.products` 拦截（建议 `map-notes`，先给现有账号授权再切 `grant`）；③ 后置：统计趋势、备案 / 打赏 / 监控 / 发布台账、`personal-stats` 多站点。
+- **风险/注意事项**：后台不显示 AI Key 明文，只给 `hasKey`；禁用用户会在登录入口直接 `ACCOUNT_DISABLED`；`admin.audit.list` 的筛选参数是 `actionPrefix`（`action` 是路由名，别再混用）；本轮未 `git commit`、未部署。
+
+### 2026-11-16 运营后台 v1 部署上线
+
+- **已做**：`store.json` 备份到 `/var/lib/account-center/backup/store-20261116-2312.json`；rsync 上线 `web/admin/`、`lib/admin.js`、`lib/store-json.js`、`app.js`、`server.js`；`/etc/account-center.env` 追加 `ADMIN_OWNER_UIDS=u_7ad0ee59bb400e2c`（owner 本人的 uid，按「登录过全部 8 个作品 + 84 个会话」识别，未打印任何钥匙明文）；`systemctl restart account-center` 成功。
+- **验证**：`/admin/` 与 `/admin/admin.js` 均 200；`/healthz` `{"ok":true}`；未带 Token 调 `admin.me` / `me.products` 均返回 `UNAUTHORIZED`；首页账号页未受影响。
+- **待办**：① 用户登录后确认「总览」有数据（首次访问会自动落 owner 记录）；② 试点作品接 `me.products` 拦截；③ 后置统计 / 台账模块。
+- **风险**：若 owner 打开后台显示「没有后台权限」，说明 `ADMIN_OWNER_UIDS` 与当前登录 uid 不一致，改 env 后重启即可；`/var/lib/account-center/backup/` 目前只保留本次一份，后续可加定时备份。
+
+### 2026-11-17 版本与发布台账（阶段 6.2）上线
+
+- **已做**：① 需求落库——`RPD_需求文档.md` 升 v1.9，新增 §3.5（目标 / 流程 / `ac_releases` 数据模型 / 7 个 `admin.release.*` / 边界 / UI / 技术 / 成功标准 / 风险），§6 拆出 6.2；`接入契约.md` §4.29 补 release 接口与「只记账、不执行 git」约定；② 后端：`store-json.js` 增 `ac_releases`，`lib/admin.js` 增 7 个接口与 `release.read/write` 权限（owner / ops），`server.js` / `dev-server.js` 提供 `repos` + `projectVersion` 配置；③ 前端 `/admin/` 新增「发布」页：当前版本卡片、台账列表、三项检查勾选、复制命令、标记已推送 / 失败 / 作废。
+- **关键结论/决定**：方案 A——服务器不跑 `git`、不存 GitHub / Gitee 凭据；`pushed` 只认人工回填的 commit 与两端 https 链接；三项检查（测试 / 备份 / 体检）前端禁用 + 接口拒绝；版本号默认补位 +1、可手改；发布 ≠ 部署。
+- **产出物**：`cloud/functions/accountCenter/lib/admin.js`、`web/admin/{index.html,admin.css,admin.js}`、`plan/RPD_需求文档.md`（v1.9）、`plan/接入契约.md`、`README.md`、`store-json.js` / `server.js` / `dev-server.js`。
+- **验证**：`node /tmp/verify-release.js` 21 项全过（未登录拒、普通账号 FORBIDDEN、owner 通过、自动补位、摘要 / 重复版本 / 未勾检查 / 非法 commit / 非 https 全被拒、标记已推送、current 与建议版本更新、已推送不可改、失败 / 作废、状态筛选、审计落账）；`node test/account.test.js` 54 项全过（fail 0）。
+- **部署**：`store.json` 备份到 `/var/lib/account-center/backup/store-20261118-0000-before-release.json`；rsync 上线 `web/admin/`、`app.js`、`server.js`、`lib/admin.js`、`lib/store-json.js`；`systemctl restart account-center` 成功；`/healthz` `{"ok":true}`；`/admin/` 200；未带 Token 调 `admin.release.current` 返回 `UNAUTHORIZED`。
+- **待办**：① 在后台「发布」页用真实发版走一遍（建议 `v1.9.0` 起点）；② 试点作品接 `me.products` 拦截；③ 后置统计 / 备案 / 打赏 / 监控台账。
+- **风险**：一端推送成功另一端失败时台账仍可能被人工标成 `pushed`，真实状态以两端仓库为准；命令由前端拼接，摘要里的双引号会被替换成单引号。

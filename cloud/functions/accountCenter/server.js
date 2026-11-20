@@ -51,7 +51,21 @@ const app = createApp({
   // 小程序登录：与 wereadProxy 云函数共享的签名密钥；没配就不开放该方式
   mp: { sharedSecret: process.env.MP_SHARED_SECRET || '' },
   // AI Key 加密密钥：不填则由 TOKEN_PEPPER 派生；填了以后不可再改（改了已托管的 Key 全部失效）
-  aiKey: { secret: process.env.AI_KEY_SECRET || '' }
+  aiKey: { secret: process.env.AI_KEY_SECRET || '' },
+  // 首个 owner：填 uid（逗号分隔），首次访问后台时自动落一条 ac_admin_members 记录
+  admin: {
+    ownerUids: String(process.env.ADMIN_OWNER_UIDS || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+    // 发布台账里展示的仓库地址（只读展示，不用于推送）
+    repos: {
+      github: process.env.GIT_GITHUB_REPO || 'chengzilala/account-center',
+      gitee: process.env.GIT_GITEE_REPO || 'chengzila/account-center',
+      branch: process.env.GIT_BRANCH || 'main'
+    },
+    projectVersion: process.env.PROJECT_VERSION || '1.9.0'
+  }
 });
 
 const OAUTH_CALLBACK = /^\/oauth\/([a-z]+)\/callback$/;

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Key 组件演示</title>
+<link rel="stylesheet" href="../web/assets/ai-key/v1/key-panel.css">
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; background: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 28px 18px 60px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .lead { color: #6b7280; font-size: 13px; margin-bottom: 18px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px; }
+  .modes { display: flex; gap: 8px; margin-bottom: 16px; }
+  .modes button { flex: 1; padding: 9px 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 10px; font-size: 13px; cursor: pointer; }
+  .modes button.on { border-color: #2f6feb; color: #2f6feb; font-weight: 600; }
+  .note { margin-top: 16px; font-size: 12px; color: #6b7280; line-height: 1.8; }
+  .demo-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .demo-row { display: flex; gap: 8px; }
+  .demo-row select, .demo-row button {
+    padding: 8px 10px; font-size: 13px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+  }
+  .demo-row select { flex: 1; }
+  .demo-row button { cursor: pointer; }
+  .demo-ok { font-size: 13px; color: #17803d; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI Key 组件演示</h1>
+  <div class="lead">同一套面板，两种存储方式。演示页不联网；换成真实后端即可上线。</div>
+
+  <div class="modes">
+    <button type="button" data-mode="local" class="on">本机存储（localStorage）</button>
+    <button type="button" data-mode="remote">服务端托管（模拟）</button>
+  </div>
+
+  <div class="card">
+    <div id="slot"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="demo-title">错误提示演示（AIKeyClient.renderError）</div>
+    <div class="demo-row">
+      <select id="errKind">
+        <option value="invalid_key">Key 无效（401）</option>
+        <option value="quota_insufficient">额度不足（402）</option>
+        <option value="subscription_expired">订阅过期</option>
+        <option value="rate_limit">限流（429）</option>
+        <option value="bad_model">模型不存在（404）</option>
+        <option value="network">断网</option>
+      </select>
+      <button type="button" id="errShow">显示错误</button>
+    </div>
+    <div id="errDemo"></div>
+  </div>
+
+  <div class="note">
+    本机模式：Key 存在这个浏览器里，换电脑要重填，测试连接需要配 proxyUrl。<br>
+    服务端托管：Key 交给自己的服务端加密保存，登录后跨设备可用；演示页用内存模拟，刷新即清空。<br>
+    真实接入见 account-center/README.md § AI Key 托管（组件已迁至 account-center/web/assets/ai-key/v1/）。
+  </div>
+</div>
+
+<script src="../web/assets/ai-key/v1/providers.js"></script>
+<script src="../web/assets/ai-key/v1/key-store.js"></script>
+<script src="../web/assets/ai-key/v1/key-panel.js"></script>
+<script src="../web/assets/ai-key/v1/ai-client.js"></script>
+<script>
+(function () {
+  var slot = document.getElementById('slot');
+  var current = null;
+
+  // 模拟后端：仅演示面板行为，刷新即清空
+  var mem = { enc: '', masked: '', baseUrl: '', model: '' };
+  function mockCall(action, payload) {
+    if (action === 'keyGet') {
+      return Promise.resolve({
+        ok: true, hasKey: !!mem.enc, masked: mem.masked, baseUrl: mem.baseUrl, model: mem.model
+      });
+    }
+    if (action === 'keySave') {
+      var key = String(payload.api_key || '').trim() || mem.enc;
+      if (!key) { return Promise.resolve({ ok: false, error: 'API Key 不能为空。' }); }
+      mem.enc = key;
+      mem.masked = key.slice(0, 6) + '……' + key.slice(-4);
+      mem.baseUrl = payload.base_url;
+      mem.model = payload.model;
+      return Promise.resolve({ ok: true, masked: mem.masked });
+    }
+    if (action === 'keyClear') {
+      mem.enc = ''; mem.masked = ''; mem.baseUrl = ''; mem.model = '';
+      return Promise.resolve({ ok: true });
+    }
+    if (action === 'keyTest') {
+      var k = String(payload.api_key || '').trim() || mem.enc;
+      if (!k) { return Promise.resolve({ ok: false, error: '请先填写 API Key。' }); }
+      return new Promise(function (resolve) {
+        setTimeout(function () {
+          resolve({ ok: true, reply: '连接正常（演示：未真正请求上游）' });
+        }, 500);
+      });
+    }
+    if (action === 'keyReveal') {
+      return Promise.resolve(mem.enc ? { ok: true, key: mem.enc } : { ok: false, error: '还没有保存 Key。' });
+    }
+    return Promise.resolve({ ok: false, error: '未知操作：' + action });
+  }
+
+  function mount(mode) {
+    if (current && current.destroy) { current.destroy(); }
+    slot.innerHTML = '';
+    var store = mode === 'local'
+      ? AIKeyStore.local({ scope: 'demo' })
+      : AIKeyStore.remote({ call: mockCall });
+    current = AIKeyPanel.mount(slot, {
+      store: store,
+      title: mode === 'local' ? 'AI Key（本机存储）' : 'AI Key（服务端托管 · 模拟）',
+      note: mode === 'local'
+        ? 'Key 只存在这个浏览器，不会上传到任何服务器。'
+        : 'Key 由你自己的服务端加密托管，页面不保存明文。',
+      footText: mode === 'local'
+        ? '本机模式：换设备需要重填；清浏览器数据会一起清掉。'
+        : '服务端托管模式：登录后各设备自动带出，随时可一键清除。'
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.modes button'), function (b) {
+    b.addEventListener('click', function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.modes button'), function (x) {
+        x.classList.toggle('on', x === b);
+      });
+      mount(b.getAttribute('data-mode'));
+    });
+  });
+
+  // 错误提示演示：覆盖 6 种常见失败，文案与卡片都由 ai-client 统一维护
+  var SAMPLES = {
+    invalid_key: { ok: false, code: 'upstream_failed', error: '上游返回 HTTP 401' },
+    quota_insufficient: { ok: false, code: 'upstream_failed', error: '余额不足，请充值' },
+    subscription_expired: { ok: false, code: 'AI_UPSTREAM', error: '订阅已过期，请续费' },
+    rate_limit: { ok: false, code: 'RATE_LIMITED', error: '请求太频繁' },
+    bad_model: { ok: false, code: 'AI_UPSTREAM', error: '模型服务返回错误：HTTP 404 model not found' },
+    network: { ok: false, code: 'NETWORK', error: 'Failed to fetch' }
+  };
+  var errDemo = document.getElementById('errDemo');
+  document.getElementById('errShow').addEventListener('click', function () {
+    var kind = document.getElementById('errKind').value;
+    AIKeyClient.renderError(errDemo, SAMPLES[kind], {
+      onRetry: function () {
+        AIKeyClient.renderError(errDemo, { ok: false, code: 'upstream', error: '重试中…' });
+        setTimeout(function () {
+          errDemo.innerHTML = '<span class="demo-ok">重试回调已触发（演示）</span>';
+        }, 700);
+      }
+    });
+  });
+
+  mount('local');
+})();
+</script>
+</body>
+</html>

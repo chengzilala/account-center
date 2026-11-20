@@ -37,7 +37,15 @@ const app = createApp({
   sms,
   oauth: oauthLib.configFromEnv(process.env),
   // 本机调试用默认密钥；线上必须走环境变量 MP_SHARED_SECRET
-  mp: { sharedSecret: process.env.MP_SHARED_SECRET || 'dev-only-mp-secret' }
+  mp: { sharedSecret: process.env.MP_SHARED_SECRET || 'dev-only-mp-secret' },
+  admin: {
+    ownerUids: String(process.env.ADMIN_OWNER_UIDS || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+    repos: { github: 'chengzilala/account-center', gitee: 'chengzila/account-center', branch: 'main' },
+    projectVersion: process.env.PROJECT_VERSION || '1.9.0'
+  }
 });
 
 const OAUTH_CALLBACK = /^\/oauth\/([a-z]+)\/callback$/;

@@ -105,10 +105,30 @@ test('邮箱登录带本机账户码后，账户码登录落到同一个 uid', a
   );
 });
 
+test('账户码没绑定过时不静默建号：先回确认，确认后才建', async () => {
+  const ctx = setup();
+
+  const first = await call(ctx.app, '', 'auth.accountCode.login', { accountCode: DEVICE_B });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.equal(first.data.needConfirm, true);
+  assert.ok(!first.data.token);
+  assert.equal(await ctx.store.get('ac_identities', `device:${DEVICE_B}`), null);
+
+  const created = await call(ctx.app, '', 'auth.accountCode.login', {
+    accountCode: DEVICE_B,
+    confirmCreate: true
+  });
+  assert.equal(created.ok, true, JSON.stringify(created));
+  assert.equal(created.data.isNew, true);
+});
+
 test('账户码已被别人占用时，邮箱登录不抢钥匙也不报错', async () => {
   const ctx = setup();
 
-  const owner = await call(ctx.app, '', 'auth.accountCode.login', { accountCode: DEVICE_B });
+  const owner = await call(ctx.app, '', 'auth.accountCode.login', {
+    accountCode: DEVICE_B,
+    confirmCreate: true
+  });
   const other = await emailLogin(ctx, 'c@example.com', { deviceId: DEVICE_B });
   assert.equal(other.ok, true);
   assert.notEqual(other.data.uid, owner.data.uid);
@@ -721,7 +741,7 @@ test('形象参考：给出 12 个昵称与简笔画头像，候选池落库复�
   assert.equal(me.data.avatar, picked);
 });
 
-test('GitHub 登录：新用户建号，再次登录落到同一 uid', async () => {
+test('GitHub 登录：首次不建号，确认后才建；再次登录落到同一 uid', async () => {
   const ctx = oauthSetup();
 
   const started = await startOAuth(ctx, 'github');
@@ -732,18 +752,30 @@ test('GitHub 登录：新用户建号，再次登录落到同一 uid', async () 
   const cb = await oauthCallback(ctx, 'github', started.state);
   assert.equal(cb.statusCode, 302);
 
-  const loginCode = callbackParam(cb, 'oauth_code');
-  assert.match(loginCode, /^[0-9a-f]{32}$/);
+  const ticket = callbackParam(cb, 'oauth_pending');
+  assert.match(ticket, /^[0-9a-f]{32}$/);
+  assert.ok(!callbackParam(cb, 'oauth_code'));
+  // 首次登录不能静默建号
+  assert.equal(await ctx.store.get('ac_identities', 'oauth:github:1001'), null);
 
-  const exchanged = await call(ctx.app, '', 'auth.oauth.exchange', { code: loginCode });
-  assert.equal(exchanged.ok, true, JSON.stringify(exchanged));
-  assert.equal(exchanged.data.isNew, true);
+  const info = await call(ctx.app, '', 'auth.oauth.pending', { ticket });
+  assert.equal(info.ok, true, JSON.stringify(info));
+  assert.equal(info.data.provider, 'github');
+  assert.equal(info.data.email, 'octo@example.com');
 
-  const me = await call(ctx.app, exchanged.data.token, 'me');
+  const created = await call(ctx.app, '', 'auth.oauth.pendingCreate', { ticket });
+  assert.equal(created.ok, true, JSON.stringify(created));
+  assert.equal(created.data.isNew, true);
+
+  const me = await call(ctx.app, created.data.token, 'me');
   assert.equal(me.ok, true);
   assert.deepEqual(me.data.keys.map((key) => key.kind), ['oauth']);
   assert.equal(me.data.keys[0].provider, 'github');
   assert.match(me.data.keys[0].masked, /^GitHub · octocat$/);
+
+  // 票据一次性
+  const reused = await call(ctx.app, '', 'auth.oauth.pendingCreate', { ticket });
+  assert.equal(reused.ok, false);
 
   const again = await startOAuth(ctx, 'github');
   const cb2 = await oauthCallback(ctx, 'github', again.state);
@@ -751,8 +783,34 @@ test('GitHub 登录：新用户建号，再次登录落到同一 uid', async () 
     code: callbackParam(cb2, 'oauth_code')
   });
   assert.equal(exchanged2.ok, true);
-  assert.equal(exchanged2.data.uid, exchanged.data.uid);
+  assert.equal(exchanged2.data.uid, created.data.uid);
   assert.equal(exchanged2.data.isNew, false);
+});
+
+test('首次第三方登录：选「已有账户」时绑到该账户，不新建空账户', async () => {
+  const ctx = oauthSetup();
+  const login = await emailLogin(ctx, 'owner@example.com');
+
+  const started = await startOAuth(ctx, 'github');
+  const cb = await oauthCallback(ctx, 'github', started.state);
+  const ticket = callbackParam(cb, 'oauth_pending');
+  assert.match(ticket, /^[0-9a-f]{32}$/);
+
+  // 未登录不能绑
+  const anonymous = await call(ctx.app, '', 'auth.oauth.pendingBind', { ticket });
+  assert.equal(anonymous.ok, false);
+
+  const bound = await call(ctx.app, login.data.token, 'auth.oauth.pendingBind', { ticket });
+  assert.equal(bound.ok, true, JSON.stringify(bound));
+  assert.equal(bound.data.provider, 'github');
+
+  const me = await call(ctx.app, login.data.token, 'me');
+  assert.deepEqual(me.data.keys.map((key) => key.kind).sort(), ['email', 'oauth']);
+  assert.equal((await ctx.store.get('ac_identities', 'oauth:github:1001')).uid, login.data.uid);
+
+  // 没有凭空多出账户
+  const users = await ctx.store.query('ac_users', {}, 10);
+  assert.equal(users.length, 1);
 });
 
 test('第三方登录：state 只能用一次，过期或伪造一律拒绝', async () => {
@@ -769,7 +827,7 @@ test('第三方登录：state 只能用一次，过期或伪造一律拒绝', as
   assert.equal(callbackParam(forged, 'oauth_error'), 'state');
 
   const other = await startOAuth(ctx, 'gitee');
-  ctx.advance(11 * 60 * 1000);
+  ctx.advance(31 * 60 * 1000);
   const expired = await oauthCallback(ctx, 'gitee', other.state);
   assert.equal(callbackParam(expired, 'oauth_error'), 'state');
 });
@@ -868,14 +926,15 @@ test('账户页可生成账户码：能登录同一 uid，重新生成后旧码�
   assert.equal(byCode.data.uid, login.data.uid);
   assert.equal(byCode.data.isNew, false);
 
-  // 重新生成：旧码立即失效（再登录会当成新账户）
+  // 重新生成：旧码立即失效（再登录只会当成「未绑定」，不再直接给新账户）
   const again = await call(ctx.app, byCode.data.token, 'account.code.generate');
   assert.equal(again.ok, true, JSON.stringify(again));
   assert.notEqual(again.data.accountCode, code);
 
   const oldCode = await call(ctx.app, '', 'auth.accountCode.login', { accountCode: code });
   assert.equal(oldCode.ok, true);
-  assert.notEqual(oldCode.data.uid, login.data.uid);
+  assert.equal(oldCode.data.needConfirm, true);
+  assert.ok(!oldCode.data.token);
 
   const anonymous = await call(ctx.app, '', 'account.code.generate');
   assert.equal(anonymous.ok, false);
@@ -937,13 +996,13 @@ test('Gitee 与 Microsoft 走同一套流程', async () => {
     const started = await startOAuth(ctx, provider);
     assert.equal(started.ok, true, JSON.stringify(started));
     const cb = await oauthCallback(ctx, provider, started.state);
-    const exchanged = await call(ctx.app, '', 'auth.oauth.exchange', {
-      code: callbackParam(cb, 'oauth_code')
+    const created = await call(ctx.app, '', 'auth.oauth.pendingCreate', {
+      ticket: callbackParam(cb, 'oauth_pending')
     });
-    assert.equal(exchanged.ok, true, JSON.stringify(exchanged));
-    assert.equal(exchanged.data.isNew, true);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    assert.equal(created.data.isNew, true);
 
-    const me = await call(ctx.app, exchanged.data.token, 'me');
+    const me = await call(ctx.app, created.data.token, 'me');
     assert.equal(me.data.keys[0].provider, provider);
   }
 });

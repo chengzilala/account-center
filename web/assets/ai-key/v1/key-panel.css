@@ -182,5 +182,5 @@
 
 @media (max-width: 480px) {
   .aik-actions { flex-direction: column; }
-  .aik-btn { width: 100%; }
+  .aik-actions .aik-btn { width: 100%; }
 }

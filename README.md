@@ -27,13 +27,14 @@ account-center/
 │   ├── account.html           # 我的账户：账户状态（含账户凭证）/ 登录方式（总览 + 绑定 / 解绑）/ 我的装置 / 跨设备登录 / 隐私与安全
 │   ├── terms.html             # 用户协议
 │   ├── privacy.html           # 隐私政策（含账户安全说明）
+│   ├── admin/                 # 运营后台（index.html + admin.css + admin.js，同域复用 ps_token）
 │   └── assets/                # ac.css（ac- 前缀样式）+ ac.js（请求封装）+ theme.js（换肤引导）+ qrcode.js（零依赖二维码）+ ai-key/v1/（AI Key 面板母本）
 ├── cloud/functions/
 │   └── accountCenter/         # 账户中心服务（按 action 路由）
 │       ├── app.js             # 核心逻辑（与部署平台无关）
 │       ├── server.js          # 生产入口（HTTP 服务）
 │       ├── dev-server.js      # 本地调试入口（验证码打印终端）
-│       └── lib/               # 存储、发信、短信（sms.js）、图形验证码（captcha.js）、令牌、限流、校验、错误码、第三方登录（oauth.js）、默认昵称与头像（persona.js）
+│       └── lib/               # 存储、发信、短信（sms.js）、图形验证码（captcha.js）、令牌、限流、校验、错误码、第三方登录（oauth.js）、默认昵称与头像（persona.js）、运营后台（admin.js）
 ├── sdk/
 │   └── ps-auth.js             # 作品侧接入 SDK（init / getUser / requireLogin / logout / track，自动换票）
 ├── plan/
@@ -51,7 +52,7 @@ account-center/
 用户自己填的 AI Key 统一放在这里，按 `uid` 加密存 `ac_ai_keys`（AES-256-GCM），所有作品共用一份。
 
 - 接口：`aikey.get` / `aikey.save` / `aikey.clear` / `aikey.reveal` / `aikey.test` / `aikey.chat`（均需登录），口径见 [接入契约.md](plan/接入契约.md) §4.28
-- **面板母本：`web/assets/ai-key/v1/`**（`providers.js` / `key-store.js` / `key-panel.js` / `key-panel.css` / `ai-client.js`）。2026-11-10 起从 `AI Key 集成/` 迁入，**以后只在这里开发**；账户页 `account.html` 同源引用 `assets/ai-key/v1/`，其他作品引用 `https://account.chesterlee.cn/assets/ai-key/v1/`，部署账户中心即全站生效（不再有 publish 步骤）
+- **面板母本：`web/assets/ai-key/v1/`**（`providers.js` / `key-store.js` / `key-panel.js` / `key-panel.css` / `ai-client.js`）。2026-11-10 起从 `AI Key 集成/` 迁入，**以后只在这里开发**；原 `AI Key 集成/` 项目当日删除，组件演示页改到 `test/ai-key-demo.html`，错误提示需求文档在 `plan/RPD_AIKey.md`。账户页 `account.html` 同源引用 `assets/ai-key/v1/`，其他作品引用 `https://account.chesterlee.cn/assets/ai-key/v1/`，部署账户中心即全站生效（不再有 publish 步骤）
 - 接入（作品侧只要这四行 + 一个挂载）：
 
   ```html
@@ -76,6 +77,19 @@ account-center/
 - 厂商清单只在 `providers.js` 维护（加一家加一项，然后部署）；`AIKeyClient` 的错误文案表只在 `ai-client.js` 维护
 - 加密密钥：`AI_KEY_SECRET`（不配则由 `TOKEN_PEPPER` 派生）；**两者都不能更换，否则已托管的 Key 全部失效**
 - 注销账户时一并删除；审计只记 host / model，不记 Key，也不进「我的足迹」
+
+## 运营后台（`/admin/`，2026-11-16）
+
+同一个服务里的「壳」，不新建用户体系、不存业务数据：页面 `web/admin/`（静态）、接口 `admin.*`（`lib/admin.js`）。
+
+- **入口**：`https://account.chesterlee.cn/admin/`，与账户页同域共用 `ps_token`；未登录跳 `../login.html?next=/admin/`，非后台账号显示「没有后台权限」
+- **角色**：`owner`（全部）/ `ops`（用户 + 权益，不能管管理员）/ `support`（只读 + 下线 + 备注）
+- **首个 owner**：服务端环境变量 `ADMIN_OWNER_UIDS=<你的 uid>`（逗号分隔），首次访问后台时自动写入 `ac_admin_members`；之后用 `admin.member.upsert` 加人
+- **接口**：`admin.me` / `admin.users.list` / `admin.user.detail` / `admin.user.status` / `admin.user.sessions.revoke` / `admin.user.note` / `admin.products.list` / `admin.product.upsert` / `admin.entitlement.set` / `admin.entitlement.revoke` / `admin.overview` / `admin.audit.list` / `admin.members.list` / `admin.member.upsert`
+- **作品准入**：`ac_products.accessMode` 缺省 `open`（行为与以前一致）；改 `grant` 后 `me.products` 对无授权用户返回 `status: "locked"`，作品侧必须据此拦截
+- **禁用账户**：`user.status = disabled` 会立刻踢掉全部会话，并在登录入口直接拒绝
+- **审计**：所有 `admin.*` 写 `ac_audit_logs`（`scope=admin` + `actorRole`）；后台只看 AI Key 状态，永远不显示明文
+- **版本与发布台账**（`/admin/` →「发布」页，2026-11-17）：`ac_releases` + `admin.release.*`（current / list / create / update / complete / fail / cancel）。**只记账、不执行 git**：新建发布单会生成一条可复制的 `git commit / tag / push` 命令，本地推送成功后回填 commit 与 GitHub / Gitee 两端链接；三项检查（测试 / 备份 / 体检）不齐不允许标记已推送。服务器不存任何 Git 凭据，发布 ≠ 部署
 
 ## 怎么跑
 

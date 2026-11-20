@@ -29,6 +29,15 @@
       </section>
 
       <section class="ac-authcard" aria-label="登录方式">
+        <!-- 首次第三方登录：先确认是新建账户还是绑到已有账户 -->
+        <div class="ac-panel is-hidden" id="panel-pending" data-panel="pending">
+          <h2>首次用 <span id="pending-provider">第三方</span> 登录</h2>
+          <p class="ac-authsub" id="pending-account">正在读取账号信息…</p>
+          <p class="ac-hint">如果这个账号其实是你本人，建议先绑定到已有账户——否则会多出一个空账户，作品和数据不在同一个人名下。</p>
+          <button type="button" class="ac-btn ac-btn-block" id="pending-bind">我已有账户，去绑定</button>
+          <button type="button" class="ac-btn ac-btn-secondary ac-btn-block" id="pending-create" style="margin-top:10px">这是新账户，直接创建</button>
+        </div>
+
         <!-- 选择登录方式 -->
         <div class="ac-panel" id="panel-choose" data-panel="choose">
           <h2>选择登录方式</h2>
@@ -159,7 +168,7 @@
         <div class="ac-panel is-hidden" id="panel-account" data-panel="account">
           <button type="button" class="ac-back" data-back>← 返回</button>
           <h2>账户码登录</h2>
-          <p class="ac-authsub">适合从旧设备迁移过来的账户。账户码等同密码，不要发给别人。</p>
+          <p class="ac-authsub">只用于登录本系统已有账户。账户码等同密码，不要发给别人。</p>
 
           <form id="form-account" novalidate>
             <label class="ac-field">
@@ -167,9 +176,15 @@
               <input class="ac-input" id="account-code" type="text" maxlength="32" spellcheck="false"
                      autocomplete="off" placeholder="例如 9f3c…8046">
             </label>
-            <p class="ac-hint">在已登录设备的「我的账户 → 账户凭证」里可以看到；没有账户码就先改用邮箱登录。</p>
+            <p class="ac-hint">在已登录设备的「我的账户 → 账户凭证」里可以看到；没有账户码就先改用邮箱登录。微信小程序设置页里的「账户码」是旧系统凭证，不是这里的登录码。</p>
             <button type="submit" class="ac-btn ac-btn-block" id="submit-account">登录</button>
           </form>
+
+          <div class="is-hidden" id="account-confirm">
+            <p class="ac-hint" id="account-confirm-text">这个账户码还没有对应账户。</p>
+            <button type="button" class="ac-btn ac-btn-block" id="account-create">确认用它创建新账户</button>
+            <button type="button" class="ac-btn ac-btn-secondary ac-btn-block" id="account-cancel" style="margin-top:10px">先取消</button>
+          </div>
         </div>
 
         <!-- 6 位码 -->
@@ -226,6 +241,21 @@
       // 第三方登录回跳：成功带 oauth_code，失败带 oauth_error
       var oauthCode = (params.get('oauth_code') || '').trim();
       var oauthError = (params.get('oauth_error') || '').trim();
+      // 首次第三方登录：服务端不直接建号，回跳带一次性票据，由用户决定新建还是绑定
+      var oauthPending = (params.get('oauth_pending') || '').trim();
+      var PENDING_KEY = 'ac.oauthPending';
+
+      function pendingSave(ticket) {
+        try { sessionStorage.setItem(PENDING_KEY, ticket); } catch (err) { /* 隐私模式忽略 */ }
+      }
+
+      function pendingPeek() {
+        try { return sessionStorage.getItem(PENDING_KEY) || ''; } catch (err) { return ''; }
+      }
+
+      function pendingClear() {
+        try { sessionStorage.removeItem(PENDING_KEY); } catch (err) { /* 隐私模式忽略 */ }
+      }
       var OAUTH_META = {
         github: { name: 'GitHub', chip: 'GH' },
         gitee: { name: 'Gitee', chip: 'GE' },
@@ -271,8 +301,30 @@
       async function done(data) {
         AC.setToken(data.token);
 
+        // 若带着「首次第三方登录」票据：这次登录完成后立刻把第三方钥匙挂到当前账户
+        var pendingTicket = pendingPeek();
+        var boundProvider = '';
+        var bindFailed = '';
+        if (pendingTicket) {
+          try {
+            var bound = await AC.call('auth.oauth.pendingBind', { ticket: pendingTicket });
+            boundProvider = bound.provider || '';
+          } catch (err) {
+            bindFailed = err.message || '绑定失败';
+          }
+          pendingClear();
+        }
+
         if (!crossDomain) {
-          location.replace(nextPath());
+          var target = nextPath();
+          var sep = target.indexOf('?') >= 0 ? '&' : '?';
+          if (boundProvider) target += sep + 'oauth_bound=' + encodeURIComponent(boundProvider);
+          if (bindFailed) {
+            showMsg('账户已登录，但第三方绑定失败：' + bindFailed, 'error');
+            setTimeout(function () { location.replace(nextPath()); }, 2200);
+            return;
+          }
+          location.replace(target);
           return;
         }
 
@@ -763,6 +815,10 @@
         this.value = this.value.toLowerCase().replace(/[^0-9a-f]/g, '').slice(0, 32);
       });
 
+      var accountForm = document.getElementById('form-account');
+      var accountConfirm = document.getElementById('account-confirm');
+      var accountConfirmCode = '';
+
       document.getElementById('form-account').addEventListener('submit', async function (event) {
         event.preventDefault();
         var btn = document.getElementById('submit-account');
@@ -772,10 +828,40 @@
         btn.disabled = true;
         showMsg('正在登录…');
         try {
-          done(await AC.call('auth.accountCode.login', { accountCode: accountCode }));
+          var res = await AC.call('auth.accountCode.login', { accountCode: accountCode });
+          if (res && res.needConfirm) {
+            accountConfirmCode = res.accountCode || accountCode;
+            document.getElementById('account-confirm-text').textContent =
+              '账户码 ' + accountConfirmCode.slice(0, 4) + '····' + accountConfirmCode.slice(-4)
+              + ' 还没有绑定任何账户。确认要用它创建一个新账户吗？如果这是你已有的账户，请先取消，改用邮箱验证码登录。';
+            accountForm.classList.add('is-hidden');
+            accountConfirm.classList.remove('is-hidden');
+            btn.disabled = false;
+            showMsg('这个账户码没有对应账户', 'error');
+            return;
+          }
+          done(res);
         } catch (err) {
           handleError(err, btn);
         }
+      });
+
+      document.getElementById('account-create').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        showMsg('正在创建账户…');
+        try {
+          done(await AC.call('auth.accountCode.login', { accountCode: accountConfirmCode, confirmCreate: true }));
+        } catch (err) {
+          handleError(err, btn);
+        }
+      });
+
+      document.getElementById('account-cancel').addEventListener('click', function () {
+        accountConfirm.classList.add('is-hidden');
+        accountForm.classList.remove('is-hidden');
+        document.getElementById('submit-account').disabled = false;
+        showMsg('已取消。已有账户请改用邮箱验证码登录，进账户页再生成账户码', 'ok');
       });
 
       /* 6 位码登录 */
@@ -794,8 +880,20 @@
         }
       });
 
-      /* 第三方回跳：先换 Token，再按普通登录流程去向 */
-      if (oauthCode) {
+      /* 首次第三方登录：先让用户确认，再决定建号还是绑定 */
+      if (oauthPending) {
+        dropParam('oauth_pending');
+        pendingSave(oauthPending);
+        showPanel('pending');
+        AC.call('auth.oauth.pending', { ticket: oauthPending }).then(function (data) {
+          document.getElementById('pending-provider').textContent = data.providerName || data.provider || '第三方';
+          document.getElementById('pending-account').textContent = data.email || data.name || '';
+        }).catch(function (err) {
+          pendingClear();
+          showPanel('choose');
+          showMsg(err.message, 'error');
+        });
+      } else if (oauthCode) {
         dropParam('oauth_code');
         showMsg('正在完成第三方登录…');
         AC.call('auth.oauth.exchange', { code: oauthCode }).then(function (data) {
@@ -814,6 +912,50 @@
           if (AC.isLoggedOut(err)) AC.clearToken();
         });
       }
+
+      /* 首次第三方登录的两个选择 */
+      var pendingBindBtn = document.getElementById('pending-bind');
+      var pendingCreateBtn = document.getElementById('pending-create');
+
+      pendingCreateBtn.addEventListener('click', async function () {
+        var ticket = pendingPeek();
+        if (!ticket) {
+          showMsg('授权已过期，请重新点一次登录', 'error');
+          showPanel('choose');
+          return;
+        }
+        pendingCreateBtn.disabled = true;
+        showMsg('正在创建账户…');
+        try {
+          done(await AC.call('auth.oauth.pendingCreate', { ticket: ticket }));
+        } catch (err) {
+          handleError(err, pendingCreateBtn);
+        }
+      });
+
+      pendingBindBtn.addEventListener('click', async function () {
+        var ticket = pendingPeek();
+        if (!ticket) {
+          showMsg('授权已过期，请重新点一次登录', 'error');
+          showPanel('choose');
+          return;
+        }
+        if (!AC.getToken()) {
+          // 未登录：票据留在 sessionStorage，等用户用已有方式登录后自动绑定
+          showMsg('请用你已有的登录方式登录，登录后会自动把 ' + document.getElementById('pending-provider').textContent + ' 绑到该账户', 'ok');
+          showPanel('choose');
+          return;
+        }
+        pendingBindBtn.disabled = true;
+        showMsg('正在绑定…');
+        try {
+          var res = await AC.call('auth.oauth.pendingBind', { ticket: ticket });
+          pendingClear();
+          location.replace('account.html?oauth_bound=' + encodeURIComponent(res.provider || ''));
+        } catch (err) {
+          handleError(err, pendingBindBtn);
+        }
+      });
 
       if (new URLSearchParams(location.search).get('deleted') === '1') {
         showMsg('账号已注销，钥匙已解除绑定', 'ok');

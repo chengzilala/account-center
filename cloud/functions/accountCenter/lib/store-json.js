@@ -13,7 +13,10 @@ const COLLECTIONS = [
   'ac_entitlements',
   'ac_audit_logs',
   'ac_ai_keys',
-  'ac_persona_pool'
+  'ac_persona_pool',
+  'ac_admin_members',
+  'ac_admin_notes',
+  'ac_releases'
 ];
 
 /**
